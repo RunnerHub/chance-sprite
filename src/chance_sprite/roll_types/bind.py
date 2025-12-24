@@ -39,7 +39,7 @@ class BindResult:
 
     @property
     def drain_value(self) -> int:
-        return max(2, 2 * self.resist.hits) + self.drain_adjust
+        return max(0, max(2, 2 * self.resist.hits) + self.drain_adjust)
 
     @property
     def drain_taken(self) -> int:
@@ -95,11 +95,7 @@ class BindResult:
         )
 
     def build_view(self, label: str) -> ui.LayoutView:
-        container = RollResult.build_header(label + f"\nForce {self.force}", self.result_color)
-
-        # Up-front bookkeeping people always ask for.
-        container.add_item(ui.TextDisplay(f"**Binding Cost:** {self.bind_cost} reagents (25 × Force)"))
-        container.add_item(ui.Separator())
+        container = RollResult.build_header(label + f"\nForce {self.force} | **Cost:** {self.bind_cost} reagents", self.result_color)
 
         bind_line = "**Binding:**\n" + self.bind.render_roll_with_glitch()
         container.add_item(ui.TextDisplay(bind_line))

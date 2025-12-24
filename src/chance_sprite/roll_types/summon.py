@@ -32,7 +32,7 @@ class SummonResult:
 
     @property
     def drain_value(self) -> int:
-        return max(2, 2 * self.resist.hits) + self.drain_adjust
+        return max(0, max(2, 2 * self.resist.hits) + self.drain_adjust)
 
     @property
     def drain_taken(self) -> int:
@@ -94,9 +94,9 @@ class SummonResult:
         container.add_item(ui.TextDisplay(resist_line))
 
         if self.succeeded:
-            container.add_item(ui.TextDisplay(f"Summoned! Net hits: **{self.net_hits}**"))
+            container.add_item(ui.TextDisplay(f"Summoned! Services: **{self.net_hits}**"))
         else:
-            container.add_item(ui.TextDisplay(f"Summoning failed. Net hits: **{self.net_hits}**"))
+            container.add_item(ui.TextDisplay(f"Summoning failed."))
         container.add_item(ui.Separator())
 
         dv_note = ""
