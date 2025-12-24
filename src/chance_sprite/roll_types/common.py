@@ -143,7 +143,7 @@ def register(group: app_commands.Group) -> None:
         limit: Optional[app_commands.Range[int, 1, 99]] = None,
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
-        result = RollResult.roll(dice=int(dice), limit=limit or 0, gremlin=gremlins or 0)
+        result = RollResult.roll(dice=int(dice), limit=limit or 0, gremlins=gremlins or 0)
         await interaction.response.send_message(view=result.build_view(label))
 
         # Todo: Add buttons
