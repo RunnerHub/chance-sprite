@@ -95,20 +95,19 @@ class BindResult:
         )
 
     def build_view(self, label: str) -> ui.LayoutView:
-        container = RollResult.build_header(label + f"\nForce {self.force} | **Cost:** {self.bind_cost} reagents", self.result_color)
+        container = RollResult.build_header(label + f"\nForce {self.force} | **Binding Cost:** {self.bind_cost} reagents, 1 service", self.result_color)
 
         bind_line = "**Binding:**\n" + self.bind.render_roll_with_glitch()
         container.add_item(ui.TextDisplay(bind_line))
 
-        resist_line = f"**Spirit Resistance (2×Force = {2*self.force} dice):**\n" + self.resist.render_roll_with_glitch()
+        resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch()
         container.add_item(ui.TextDisplay(resist_line))
 
+        services_changed = f"Services: **{self.services_in} → {self.services_out}**"
         if self.succeeded:
-            container.add_item(ui.TextDisplay(f"Bound! Net hits: **{self.net_hits}**"))
+            container.add_item(ui.TextDisplay(f"Bound! Net hits: **{self.net_hits}**. {services_changed}"))
         else:
-            container.add_item(ui.TextDisplay(f"Binding failed. Net hits: **{self.net_hits}**"))
-
-        container.add_item(ui.TextDisplay(f"Services: **{self.services_in} → {self.services_out}** (binding costs 1)"))
+            container.add_item(ui.TextDisplay(f"Binding failed. {services_changed}"))
         container.add_item(ui.Separator())
 
         dv_note = ""
