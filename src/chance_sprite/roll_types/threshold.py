@@ -47,26 +47,19 @@ class ThresholdResult:
         return color
 
     def build_view(self, comment: str) -> ui.LayoutView:
-        container = ui.Container(accent_color=self.result_color)
+        container = RollResult.build_header(comment, self.result_color)
 
-        header = comment.strip() if comment else ""
-        if header:
-            container.additem(ui.TextDisplay(f"# {header}"))
-
-        dice = f"`[{self.result.dice}]`" + self.result.render_dice() + f" [**{self.result.hits}** Hit{'' if self.result.hits == 1 else 's'}]"
-
+        dice = self.result.render_roll()
         if self.threshold:
             dice += f" vs ({self.threshold})"
+        glitch = self.result.render_glitch()
+        if glitch:
+            dice += "\n" + glitch
         container.add_item(ui.TextDisplay(dice))
 
         if self.threshold > 0:
             outcome = "Succeeded!" if self.succeeded else "Failed!"
             container.add_item(ui.TextDisplay(f"**{outcome}** ({self.net_hits:+d} net)"))
-
-        if self.result.glitch == Glitch.CRITICAL:
-            container.add_item(ui.TextDisplay("### **Critical Glitch!**"))
-        elif self.result.glitch == Glitch.GLITCH:
-            container.add_item(ui.TextDisplay("### Glitch!"))
 
         view = ui.LayoutView(timeout=None)
         view.add_item(container)

@@ -72,10 +72,7 @@ class ExtendedResult:
 
     def build_view(self, comment: str) -> ui.LayoutView:
         accent = 0x88FF88 if self.succeeded else 0xFF8888
-        container = ui.Container(accent_color=accent)
-
-        if comment.strip():
-            container.add_item(ui.TextDisplay(f"# {comment.strip()}"))
+        container = RollResult.build_header(comment, accent)
 
         container.add_item(
             ui.TextDisplay(
@@ -90,7 +87,7 @@ class ExtendedResult:
         prev = 0
         for it in self.iterations:
             blocks.append(
-                f"`[{it.roll.dice}]` {it.roll.render_dice()} [{prev}+**{it.roll.hits}**=**{it.cumulative_hits}**]"
+                f"`{it.roll.dice}d6` {it.roll.render_dice()} [{prev}+**{it.roll.hits}**=**{it.cumulative_hits}**]"
             )
             prev = it.cumulative_hits
 
@@ -110,7 +107,7 @@ class ExtendedResult:
         container.add_item(ui.Separator())
         container.add_item(
             ui.TextDisplay(
-                f"Result: **{'Succeeded' if self.succeeded else 'Failed'}** after **{self.iters_used}** interval{"s" if self.iters_used != 1 else ""} with **{self.final_hits}** total hits"
+                f"Result: **{'Succeeded' if self.succeeded else 'Failed'}** after **{self.iters_used}** interval{"s" if self.iters_used != 1 else ""} with {self.final_hits} total hits (**{self.final_hits - self.threshold}** net)"
             )
         )
 

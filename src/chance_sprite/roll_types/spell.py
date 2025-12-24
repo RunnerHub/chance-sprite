@@ -87,7 +87,7 @@ class SpellcastResult:
         if lim < 1:
             raise ValueError("limit must be >= 1")
 
-        cast = RollResult.roll(cast_dice)
+        cast = RollResult.roll(cast_dice, limit=limit or 0)
         drain = RollResult.roll(drain_dice)
 
         return SpellcastResult(
@@ -99,47 +99,28 @@ class SpellcastResult:
         )
 
     def build_view(self, comment: str) -> ui.LayoutView:
-        container = ui.Container(accent_color=self.result_color)
-
-        header = comment.strip() if comment else ""
-        if header:
-            container.add_item(ui.TextDisplay(f"# {header}"))
+        container = RollResult.build_header(comment+f"\nForce {self.force}", self.result_color)
 
         # Spellcasting line: show raw hits and limited hits
         cast_line = (
-            f"Spellcasting: `[{self.cast.dice}]`"
-            + self.cast.render_dice()
-            + f" [**{self.cast.hits}** hit{'' if self.cast.hits == 1 else 's'}"
-            + (f" → **{self.cast_hits_limited}** limited]" if self.limit >= 0 else "]")
-            + f" (Force {self.force}, Limit {self.limit})"
+            f"**Spellcasting:**\n"
+            + self.cast.render_roll_with_glitch()
         )
         container.add_item(ui.TextDisplay(cast_line))
+        container.add_item(ui.Separator())
 
         # Drain line: threshold-style
         drain_line = (
-            f"Drain: `[{self.drain.dice}]`"
-            + self.drain.render_dice()
-            + f" [**{self.drain.hits}** hit{'' if self.drain.hits == 1 else 's'}]"
+            f"**Drain:** \n"
+            + self.drain.render_roll() + f" vs. DV{self.drain_value}"
+            + self.drain.render_glitch()
         )
-        if self.drain_value:
-            drain_line += f" vs DV{self.drain_value}"
         container.add_item(ui.TextDisplay(drain_line))
 
         # Outcome text (drain)
         if self.drain_value > 0:
-            outcome = "Resisted Drain!" if self.drain_succeeded else "Took Drain!"
-            container.add_item(ui.TextDisplay(f"**{outcome}** ({self.drain_net_hits:+d} net)"))
-
-        # Glitch notes (keep separate and explicit)
-        if self.cast.glitch == Glitch.CRITICAL:
-            container.add_item(ui.TextDisplay("### **Spellcasting: Critical Glitch!**"))
-        elif self.cast.glitch == Glitch.GLITCH:
-            container.add_item(ui.TextDisplay("### Spellcasting: Glitch!"))
-
-        if self.drain.glitch == Glitch.CRITICAL:
-            container.add_item(ui.TextDisplay("### **Drain: Critical Glitch!**"))
-        elif self.drain.glitch == Glitch.GLITCH:
-            container.add_item(ui.TextDisplay("### Drain: Glitch!"))
+            outcome = "Resisted Drain!" if self.drain_succeeded else f"Took **{-self.drain_net_hits}** Drain!"
+            container.add_item(ui.TextDisplay(outcome))
 
         view = ui.LayoutView(timeout=None)
         view.add_item(container)

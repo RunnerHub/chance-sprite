@@ -42,29 +42,15 @@ class OpposedResult:
         else:
             accent = 0x8888FF
     
-        container = ui.Container(accent_color=accent)
-    
-        if comment.strip():
-            container.add_item(ui.TextDisplay(f"# {comment.strip()}"))
-    
-        container.add_item(ui.TextDisplay(f"Opposed roll: `[{self.initiator.dice}]` vs. `[{self.defender.dice}]`"))
+        container = RollResult.build_header(comment, accent)
     
         # Initiator block
+        container.add_item(ui.TextDisplay(f"**Initiator:**\n{self.initiator.render_roll_with_glitch()}"))
+
         container.add_item(ui.Separator())
-        container.add_item(ui.TextDisplay(f"**Initiator:** {self.initiator.render_dice()} [**{self.initiator.hits}** Hits]"))
-        if self.initiator.glitch == Glitch.CRITICAL:
-            container.add_item(ui.TextDisplay("```diff\n- Critical Glitch!\n```"))
-        elif self.initiator.glitch == Glitch.GLITCH:
-            container.add_item(ui.TextDisplay("```diff\n- Glitch!\n```"))
-    
         # Defender block
-        container.add_item(ui.Separator())
-        container.add_item(ui.TextDisplay(f"**Defender:** {self.defender.render_dice()} [**{self.defender.hits}** Hits]"))
-        if self.defender.glitch == Glitch.CRITICAL:
-            container.add_item(ui.TextDisplay("```diff\n- Critical Glitch!\n```"))
-        elif self.defender.glitch == Glitch.GLITCH:
-            container.add_item(ui.TextDisplay("```diff\n- Glitch!\n```"))
-    
+        container.add_item(ui.TextDisplay(f"**Defender:**\n{self.defender.render_roll_with_glitch()}"))
+
         # Outcome
         container.add_item(ui.Separator())
         if net == 0:

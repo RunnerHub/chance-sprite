@@ -13,4 +13,10 @@ Needs a discord_secret.json in ~/.config/chance_sprite
 
 Currently implemented: simple, extended, opposed, threshold, and spell rolls.
 
-Todo: edge, more roll types, emoji management
+WIP:
+- limits (and greyed-out dice)
+- gremlins
+TODO:
+- edge
+- more roll types
+- emoji management

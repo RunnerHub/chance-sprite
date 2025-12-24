@@ -72,6 +72,7 @@ class RollResult:
         if header:
             container.add_item(ui.TextDisplay(f"## {header}"))
             container.add_item(ui.Separator())
+        return container
 
 
     def render_dice(self, *, max_dice: int = MAX_EMOJI_DICE) -> str:
@@ -85,9 +86,17 @@ class RollResult:
             line += f"\n(+{hidden} more)"
         return line
 
+    def render_glitch(self):
+        if self.glitch == Glitch.GLITCH:
+            return "```diff\n-Glitch!```"
+        if self.glitch == Glitch.CRITICAL:
+            return "```diff\n-Critical Glitch!```"
+        if self.glitch == Glitch.NONE:
+            return ""
+
     def render_roll(self, *, max_dice: int = MAX_EMOJI_DICE):
-        line = f"`[{self.dice}]`" + self.render_dice()
-        if limit>0:
+        line = f"`{self.dice}d6`" + self.render_dice()
+        if self.limit>0:
             if self.hits > self.limit:
                 line += f" {self.hits} hit{'' if self.hits == 1 else 's'}, limited to **{self.limit}**"
             else:
@@ -95,24 +104,16 @@ class RollResult:
         else:
             line += f" **{self.hits}** hit{'' if self.hits == 1 else 's'}"
         return line
-
-    def render_glitch(self):
-        if self.glitch == Glitch.GLITCH:
-            return "```diff\n-Glitch!```"
-        if self.glitch == Glitch.CRITICAL:
-            return "```diff\n-Critical Glitch!```"
+    def render_roll_with_glitch(self, *, max_dice: int = MAX_EMOJI_DICE):
+        line = self.render_roll(max_dice=max_dice)
+        line += self.render_glitch()
+        return line
 
     def build_view(self, comment: str) -> ui.LayoutView:
         container = self.build_header(comment, 0x8888FF)
 
-        dice = render_roll()
-
+        dice = self.render_roll_with_glitch()
         container.add_item(ui.TextDisplay(dice))
-
-        if self.glitch == Glitch.CRITICAL:
-            container.add_item(ui.TextDisplay("### **Critical Glitch!**"))
-        elif self.glitch == Glitch.GLITCH:
-            container.add_item(ui.TextDisplay("### Glitch!"))
 
         view = ui.LayoutView(timeout=None)
         view.add_item(container)
