@@ -1,4 +1,4 @@
-# summon.py
+# bind.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,23 +12,30 @@ from .common import RollResult, Glitch
 
 
 @dataclass(frozen=True)
-class SummonResult:
+class BindResult:
     # Inputs
     force: int
-    drain_adjust: int  # additive override applied to DV after spirit hits
+    services_in: int
+    drain_adjust: int
 
     # Rolls
-    summon: RollResult          # limited by limit/force via RollResult.limit
-    resist: RollResult          # spirit resistance; dice = force
-    drain: RollResult           # drain resistance roll
+    bind: RollResult
+    resist: RollResult
+    drain: RollResult
 
     @property
     def net_hits(self) -> int:
-        return self.summon.hits - self.resist.hits
+        return self.bind.hits - self.resist.hits
 
     @property
     def succeeded(self) -> bool:
         return self.net_hits > 0
+
+    @property
+    def services_out(self) -> int:
+        # Binding costs 1 service; on success add net hits; never below 0.
+        base = max(0, self.services_in - 1)
+        return base + (self.net_hits if self.succeeded else 0)
 
     @property
     def drain_value(self) -> int:
@@ -39,24 +46,25 @@ class SummonResult:
         return max(0, self.drain_value - self.drain.hits)
 
     @property
+    def bind_cost(self) -> int:
+        return 25 * self.force
+
+    @property
     def result_color(self) -> int:
-        # Critical glitch anywhere = red.
         if (
-            self.summon.glitch == Glitch.CRITICAL
+            self.bind.glitch == Glitch.CRITICAL
             or self.resist.glitch == Glitch.CRITICAL
             or self.drain.glitch == Glitch.CRITICAL
         ):
             return 0xFF0000
 
-        # Any glitch: purple-ish if success, red-ish if fail.
         if (
-            self.summon.glitch == Glitch.GLITCH
+            self.bind.glitch == Glitch.GLITCH
             or self.resist.glitch == Glitch.GLITCH
             or self.drain.glitch == Glitch.GLITCH
         ):
             return 0xCC44CC if self.succeeded else 0xCC4444
 
-        # Otherwise: base on summon net hits outcome, with failure looking warmer for drain taken.
         if self.succeeded:
             return 0x88FF88
         return 0xFF8888 if self.drain_taken > 0 else 0xFFAA66
@@ -65,21 +73,23 @@ class SummonResult:
     def roll(
         *,
         force: int,
-        summon_dice: int,
+        bind_dice: int,
         drain_dice: int,
+        services_in: int,
         limit: Optional[int] = None,
         drain_adjust: int = 0,
-    ) -> SummonResult:
+    ) -> BindResult:
         lim = limit or force
 
-        summon = RollResult.roll(int(summon_dice), limit=int(lim))
-        resist = RollResult.roll(int(force))
-        drain = RollResult.roll(int(drain_dice))
+        bind = RollResult.roll(bind_dice, limit=int(lim))
+        resist = RollResult.roll(force * 2)
+        drain = RollResult.roll(drain_dice)
 
-        return SummonResult(
+        return BindResult(
             force=int(force),
+            services_in=int(services_in),
             drain_adjust=int(drain_adjust),
-            summon=summon,
+            bind=bind,
             resist=resist,
             drain=drain,
         )
@@ -87,16 +97,22 @@ class SummonResult:
     def build_view(self, label: str) -> ui.LayoutView:
         container = RollResult.build_header(label + f"\nForce {self.force}", self.result_color)
 
-        summon_line = "**Summoning:**\n" + self.summon.render_roll_with_glitch()
-        container.add_item(ui.TextDisplay(summon_line))
+        # Up-front bookkeeping people always ask for.
+        container.add_item(ui.TextDisplay(f"**Binding Cost:** {self.bind_cost} reagents (25 × Force)"))
+        container.add_item(ui.Separator())
 
-        resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch()
+        bind_line = "**Binding:**\n" + self.bind.render_roll_with_glitch()
+        container.add_item(ui.TextDisplay(bind_line))
+
+        resist_line = f"**Spirit Resistance (2×Force = {2*self.force} dice):**\n" + self.resist.render_roll_with_glitch()
         container.add_item(ui.TextDisplay(resist_line))
 
         if self.succeeded:
-            container.add_item(ui.TextDisplay(f"Summoned! Net hits: **{self.net_hits}**"))
+            container.add_item(ui.TextDisplay(f"Bound! Net hits: **{self.net_hits}**"))
         else:
-            container.add_item(ui.TextDisplay(f"Summoning failed. Net hits: **{self.net_hits}**"))
+            container.add_item(ui.TextDisplay(f"Binding failed. Net hits: **{self.net_hits}**"))
+
+        container.add_item(ui.TextDisplay(f"Services: **{self.services_in} → {self.services_out}** (binding costs 1)"))
         container.add_item(ui.Separator())
 
         dv_note = ""
@@ -123,11 +139,12 @@ class SummonResult:
 
 
 def register(group: app_commands.Group) -> None:
-    @group.command(name="summon", description="Summoning test vs spirit resistance + drain (SR5).")
+    @group.command(name="bind", description="Binding test vs spirit resistance (2×Force) + drain (SR5).")
     @app_commands.describe(
-        label="A label to describe the roll (spirit type + task are a good start).",
-        force="Spirit Force (also default limit; also spirit resistance dice).",
-        summon_dice="Summoning dice pool (1-99).",
+        label="A label to describe the roll (spirit type + prep are a good start).",
+        force="Spirit Force (also default limit; spirit resistance uses 2×Force dice).",
+        services_in="Services currently owed by the spirit before binding (from summoning).",
+        bind_dice="Binding dice pool (1-99).",
         drain_dice="Drain resistance dice pool (1-99).",
         limit="Optional limit override (defaults to Force).",
         drain_adjust="Optional adjustment to drain DV (additive; can be negative).",
@@ -136,16 +153,18 @@ def register(group: app_commands.Group) -> None:
         interaction: discord.Interaction,
         label: str,
         force: app_commands.Range[int, 1, 99],
-        summon_dice: app_commands.Range[int, 1, 99],
+        services_in: app_commands.Range[int, 0, 99],
+        bind_dice: app_commands.Range[int, 1, 99],
         drain_dice: app_commands.Range[int, 1, 99],
         limit: Optional[app_commands.Range[int, 1, 99]] = None,
         drain_adjust: app_commands.Range[int, -99, 99] = 0,
     ) -> None:
-        result = SummonResult.roll(
+        result = BindResult.roll(
             force=int(force),
-            summon_dice=int(summon_dice),
+            services_in=int(services_in),
+            bind_dice=int(bind_dice),
             drain_dice=int(drain_dice),
-            limit=limit or 0,
+            limit=int(limit) if limit is not None else None,
             drain_adjust=int(drain_adjust),
         )
         await interaction.response.send_message(view=result.build_view(label))
