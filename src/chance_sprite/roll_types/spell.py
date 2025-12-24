@@ -1,4 +1,4 @@
-# src/chance_sprite/sr5/roll_types/spellcast.py
+# spell.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -70,22 +70,7 @@ class SpellcastResult:
         drain_dice: int,
         limit: Optional[int] = None,
     ) -> SpellcastResult:
-        if force < 1:
-            raise ValueError("force must be >= 1")
-        if cast_dice < 1:
-            raise ValueError("cast_dice must be >= 1")
-        if cast_dice > 99:
-            raise ValueError("cast_dice must be <= 99")
-        if drain_dice < 1:
-            raise ValueError("drain_dice must be >= 1")
-        if drain_dice > 99:
-            raise ValueError("drain_dice must be <= 99")
-        if drain_value < 0:
-            raise ValueError("drain_value must be >= 0")
-
         lim = force if limit is None else limit
-        if lim < 1:
-            raise ValueError("limit must be >= 1")
 
         cast = RollResult.roll(cast_dice, limit=limit or 0)
         drain = RollResult.roll(drain_dice)
