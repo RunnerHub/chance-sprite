@@ -98,8 +98,8 @@ class SpellcastResult:
             drain=drain,
         )
 
-    def build_view(self, comment: str) -> ui.LayoutView:
-        container = RollResult.build_header(comment+f"\nForce {self.force}", self.result_color)
+    def build_view(self, label: str) -> ui.LayoutView:
+        container = RollResult.build_header(label+f"\nForce {self.force}", self.result_color)
 
         # Spellcasting line: show raw hits and limited hits
         cast_line = (
@@ -130,21 +130,21 @@ class SpellcastResult:
 def register(group: app_commands.Group) -> None:
     @group.command(name="spellcast", description="Spellcasting test + drain resistance (SR5).")
     @app_commands.describe(
+        label="A label to describe the roll (spell name and target are a good start).",
         force="Spell Force (also default limit).",
         cast_dice="Spellcasting dice pool (1-99).",
         drain_value="Drain value (threshold for drain resistance).",
         drain_dice="Drain resistance dice pool (1-99).",
-        limit="Optional limit override (defaults to Force).",
-        comment="A comment to describe the roll.",
+        limit="Optional limit override (defaults to Force)."
     )
     async def cmd(
         interaction: discord.Interaction,
+        label: str,
         force: app_commands.Range[int, 1, 99],
         cast_dice: app_commands.Range[int, 1, 99],
         drain_value: app_commands.Range[int, 0, 99],
         drain_dice: app_commands.Range[int, 1, 99],
         limit: Optional[app_commands.Range[int, 1, 99]] = None,
-        comment: str = "",
     ) -> None:
         result = SpellcastResult.roll(
             force=int(force),
@@ -153,5 +153,5 @@ def register(group: app_commands.Group) -> None:
             drain_dice=int(drain_dice),
             limit=int(limit) if limit is not None else None,
         )
-        await interaction.response.send_message(view=result.build_view(comment))
+        await interaction.response.send_message(view=result.build_view(label))
         _msg = await interaction.original_response()

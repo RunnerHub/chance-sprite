@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import discord
 from discord import app_commands
@@ -27,9 +27,11 @@ class ExtendedResult:
     succeeded: bool
     final_hits: int
     iters_used: int
+    limit: int
+    gremlins: int
 
     @staticmethod
-    def roll(dice: int, threshold: int, max_iters: int) -> ExtendedResult:
+    def roll(dice: int, threshold: int, max_iters: int, limit: int, gremlins: int) -> ExtendedResult:
         if threshold < 1:
             raise ValueError("threshold must be >= 1")
         if max_iters < 1:
@@ -44,21 +46,13 @@ class ExtendedResult:
             if pool < 1:
                 break
 
-            r = RollResult.roll(pool)
+            r = RollResult.roll(pool, limit=limit, gremlins=gremlins)
             cumulative += r.hits
             iters_used += 1
             iterations.append(ExtendedIteration(n=i, roll=r, cumulative_hits=cumulative))
 
             if cumulative >= threshold:
-                return ExtendedResult(
-                    start_dice=dice,
-                    threshold=threshold,
-                    max_iters=max_iters,
-                    iterations=iterations,
-                    succeeded=True,
-                    final_hits=cumulative,
-                    iters_used=iters_used,
-                )
+                break
 
         return ExtendedResult(
             start_dice=dice,
@@ -68,11 +62,13 @@ class ExtendedResult:
             succeeded=(cumulative >= threshold),
             final_hits=cumulative,
             iters_used=iters_used,
+            limit=limit,
+            gremlins=gremlins
         )
 
-    def build_view(self, comment: str) -> ui.LayoutView:
+    def build_view(self, label: str) -> ui.LayoutView:
         accent = 0x88FF88 if self.succeeded else 0xFF8888
-        container = RollResult.build_header(comment, accent)
+        container = RollResult.build_header(label, accent)
 
         container.add_item(
             ui.TextDisplay(
@@ -118,20 +114,24 @@ class ExtendedResult:
 def register(group: app_commands.Group) -> None:
     @group.command(name="extended", description="Extended roll: repeated tests with shrinking dice pool.")
     @app_commands.describe(
+        label="A label to describe the roll.",
         dice="Starting dice pool (1-99).",
         threshold="Total hits needed (>=1).",
         max_iters="Maximum number of rolls (1-99).",
-        comment="Optional title/comment.",
+        limit="Limit applicable to each roll.",
+        gremlins="Reduce the number of 1s required for a glitch."
     )
     async def cmd(
-            interaction: discord.Interaction,
-            dice: app_commands.Range[int, 1, 99],
-            threshold: app_commands.Range[int, 1, 99],
-            max_iters: app_commands.Range[int, 1, 99] = 10,
-            comment: str = "",
+        interaction: discord.Interaction,
+        label: str,
+        dice: app_commands.Range[int, 1, 99],
+        threshold: app_commands.Range[int, 1, 99],
+        max_iters: app_commands.Range[int, 1, 99] = 10,
+        limit: Optional[app_commands.Range[int, 1, 99]] = None,
+        gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
-        result = ExtendedResult.roll(int(dice), int(threshold), int(max_iters))
-        await interaction.response.send_message(view=result.build_view(comment))
+        result = ExtendedResult.roll(int(dice), int(threshold), int(max_iters), limit or 0, gremlins or 0)
+        await interaction.response.send_message(view=result.build_view(label))
 
         # Todo: Add buttons
         _msg = await interaction.original_response()

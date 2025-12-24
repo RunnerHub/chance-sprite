@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 import discord
 from discord import ui
@@ -42,11 +42,19 @@ class RollResult:
     dice: int
     rolls: List[int]
     ones: int
-    hits: int
+    dice_hits: int
     glitch: Glitch
     limit: int
     gremlins: int
     explode: bool
+
+    @property
+    def hits(self):
+        if self.limit > 0:
+            return min(self.limit, self.dice_hits)
+        else:
+            return self.dice_hits
+
 
     @staticmethod
     def roll(dice: int, *, limit: int = 0, gremlins: int = 0, explode: bool = False, rng: random.Random = _default_random) -> RollResult:
@@ -57,20 +65,20 @@ class RollResult:
 
         rolls = [rng.randint(1, 6) for _ in range(dice)]
         ones = sum(1 for r in rolls if r == 1)
-        hits = sum(1 for r in rolls if r in (5, 6))
+        dice_hits = sum(1 for r in rolls if r in (5, 6))
 
         glitch = Glitch.NONE
         if ones * 2 + gremlins > dice:
-            glitch = Glitch.CRITICAL if hits == 0 else Glitch.GLITCH
+            glitch = Glitch.CRITICAL if dice_hits == 0 else Glitch.GLITCH
 
-        return RollResult(dice=dice, rolls=rolls, ones=ones, hits=hits, glitch=glitch, limit=limit, gremlins=gremlins, explode=explode)
+        return RollResult(dice=dice, rolls=rolls, ones=ones, dice_hits=dice_hits, glitch=glitch, limit=limit, gremlins=gremlins, explode=explode)
 
     @staticmethod
-    def build_header(comment, colour):
+    def build_header(label, colour):
         container = ui.Container(accent_color=colour)
-        header = comment.strip() if comment else ""
+        header = label.strip() if label else ""
         if header:
-            container.add_item(ui.TextDisplay(f"## {header}"))
+            container.add_item(ui.TextDisplay(f"### {header}"))
             container.add_item(ui.Separator())
         return container
 
@@ -97,10 +105,10 @@ class RollResult:
     def render_roll(self, *, max_dice: int = MAX_EMOJI_DICE):
         line = f"`{self.dice}d6`" + self.render_dice()
         if self.limit>0:
-            if self.hits > self.limit:
-                line += f" {self.hits} hit{'' if self.hits == 1 else 's'}, limited to **{self.limit}**"
+            if self.dice_hits > self.limit:
+                line += f" ~~{self.hits} hit{'' if self.dice_hits == 1 else 's'}~~ limit **{self.limit}**"
             else:
-                line += f" **{self.hits}** hit{'' if self.hits == 1 else 's'} (limit {self.limit})"
+                line += f" **{self.hits}** hit{'' if self.dice_hits == 1 else 's'} ~~limit {self.limit}~~"
         else:
             line += f" **{self.hits}** hit{'' if self.hits == 1 else 's'}"
         return line
@@ -109,8 +117,8 @@ class RollResult:
         line += self.render_glitch()
         return line
 
-    def build_view(self, comment: str) -> ui.LayoutView:
-        container = self.build_header(comment, 0x8888FF)
+    def build_view(self, label: str) -> ui.LayoutView:
+        container = self.build_header(label, 0x8888FF)
 
         dice = self.render_roll_with_glitch()
         container.add_item(ui.TextDisplay(dice))
@@ -123,16 +131,20 @@ class RollResult:
 def register(group: app_commands.Group) -> None:
     @group.command(name="simple", description="Roll some d6s, Shadowrun-style.")
     @app_commands.describe(
+        label="A label to describe the roll.",
         dice="Number of dice (1-99).",
-        comment="A comment to describe the roll.",
+        limit="A limit for the number of hits.",
+        gremlins="Reduce the number of 1s required for a glitch."
     )
     async def cmd(
         interaction: discord.Interaction,
+        label: str,
         dice: app_commands.Range[int, 1, 99],
-        comment: str = "",
+        limit: Optional[app_commands.Range[int, 1, 99]] = None,
+        gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
-        result = RollResult.roll(dice=int(dice))
-        await interaction.response.send_message(view=result.build_view(comment))
+        result = RollResult.roll(dice=int(dice), limit=limit or 0, gremlin=gremlins or 0)
+        await interaction.response.send_message(view=result.build_view(label))
 
         # Todo: Add buttons
         _msg = await interaction.original_response()

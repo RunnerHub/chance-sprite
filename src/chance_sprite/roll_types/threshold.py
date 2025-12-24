@@ -27,10 +27,10 @@ class ThresholdResult:
         return self.result.hits - self.threshold
 
     @staticmethod
-    def roll(dice: int, threshold: int) -> ThresholdResult:
+    def roll(dice: int, threshold: int, *, limit: int = 0, gremlins: int = 0) -> ThresholdResult:
         if threshold < 0:
             raise ValueError("threshold must be >= 0")
-        return ThresholdResult(result=RollResult.roll(dice), threshold=threshold)
+        return ThresholdResult(result=RollResult.roll(dice, limit=limit, gremlins=gremlins), threshold=threshold)
 
     @property
     def result_color(self) -> int:
@@ -46,8 +46,8 @@ class ThresholdResult:
             color = 0xCC44CC if succ else 0xCC4444
         return color
 
-    def build_view(self, comment: str) -> ui.LayoutView:
-        container = RollResult.build_header(comment, self.result_color)
+    def build_view(self, label: str) -> ui.LayoutView:
+        container = RollResult.build_header(label, self.result_color)
 
         dice = self.result.render_roll()
         if self.threshold:
@@ -69,18 +69,22 @@ class ThresholdResult:
 def register(group: app_commands.Group) -> None:
     @group.command(name="threshold", description="Roll some d6s, Shadowrun-style.")
     @app_commands.describe(
+        label="A label to describe the roll.",
         dice="Number of dice (1-99).",
         threshold="Threshold to reach (optional).",
-        comment="A comment to describe the roll.",
+        limit="A limit for the number of hits.",
+        gremlins="Reduce the number of 1s required for a glitch."
     )
     async def cmd(
         interaction: discord.Interaction,
+        label: str,
         dice: app_commands.Range[int, 1, 99],
         threshold: app_commands.Range[int, 0, 99] = 0,
-        comment: str = "",
+        limit: Optional[app_commands.Range[int, 1, 99]] = None,
+        gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
-        result = ThresholdResult.roll(dice=int(dice), threshold=int(threshold))
-        await interaction.response.send_message(view=result.build_view(comment))
+        result = ThresholdResult.roll(dice=int(dice), threshold=threshold or 0, limit=limit or 0, gremlins=gremlins or 0)
+        await interaction.response.send_message(view=result.build_view(label))
 
         # Todo: Add buttons
         _msg = await interaction.original_response()
