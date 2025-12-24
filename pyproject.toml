@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chance-sprite"
+version = "0.1.0"
+description = "Shadowrun SR5 dice bot"
+requires-python = ">=3.11"
+dependencies = [
+  "discord.py>=2.3",
+  "platformdirs>=4.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
