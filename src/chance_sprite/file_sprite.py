@@ -1,93 +1,92 @@
-# file_sprite.py
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
+from collections.abc import MutableMapping, Iterator
+from typing import Any
 
 from platformdirs import PlatformDirs
 
 from . import APP_NAME
 
-class CacheFile:
+log = logging.getLogger(__name__)
+
+class BaseFile(MutableMapping[str, Any]):
+    def __init__(self, _dir: Path, filename: str):
+        self._dir = _dir
+        self.path = _dir / filename
+        self.data = self._load()
+
+    # File I/O
+    def _load(self) -> dict:
+        if not self.path.exists():
+            self._dir.mkdir(parents=True, exist_ok=True)
+            log.warning("File not found: %s; proceeding without it", self.path)
+            return {}
+        try:
+            with self.path.open("r", encoding="utf-8") as f:
+                v = json.load(f)
+            if isinstance(v, dict):
+                return v
+            else:
+                log.warning("Expected JSON object in %s, got %s; using empty data", self.path, type(v).__name__)
+                return {}
+        except json.JSONDecodeError:
+            log.exception("Invalid JSON in %s; using empty data", self.path)
+            return {}
+        except OSError:
+            log.exception("Could not read %s; using empty data", self.path)
+            return {}
+
+    def save(self) -> None:
+        self._dir.mkdir(parents=True, exist_ok=True)
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(self.data, f, indent=2, ensure_ascii=False)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(self.path)
+
+    # Collection methods
+    def __getitem__(self, key) -> Any:
+        return self.data[key] # raises KeyError if missing
+
+    def __setitem__(self, key, value) -> None:
+        self.data[key] = value
+        self.save()
+
+    def __delitem__(self, key) -> None:
+        del self.data[key] # raises KeyError if missing
+        self.save()
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.data)
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    # Helpers
+    def set(self, key, value) -> None:
+        self.data[key] = value
+
+    def remove(self, key) -> None:
+        self.data.pop(key, None)
+        self.save()
+
+
+class CacheFile(BaseFile):
     _cache_dir = Path(PlatformDirs(appname=APP_NAME, appauthor=False).user_cache_dir)
     def __init__(self, filename: str):
-        self.path = self._cache_dir / filename
-        self.data = self._load()
-    
-    def _load(self) -> dict:
-        if not os.path.exists(self.path):
-            return {}
-        try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                v = json.load(f)
-            return v if isinstance(v, dict) else {}
-        except (json.JSONDecodeError, OSError):
-            return {}
+        super().__init__(self._cache_dir, filename)
 
-    def save(self) -> None:
-        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, self.path)
-
-    def get(self, key, default=None):
-        return self.data.get(key, default)
-
-    def set(self, key, value):
-        self.data[key] = value
-        self.save()
-
-class ConfigFile:
+class ConfigFile(BaseFile):
     _config_dir = Path(PlatformDirs(appname=APP_NAME, appauthor=False).user_config_dir)
     def __init__(self, filename: str):
-        self.path = self._config_dir / filename
-        self.data = self._load()
+        super().__init__(self._config_dir, filename)
 
-    def _load(self) -> dict:
-        if not os.path.exists(self.path):
-            return {}
-        try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                v = json.load(f)
-            return v if isinstance(v, dict) else {}
-        except (json.JSONDecodeError, OSError):
-            return {}
-
-    def get(self, key, default=None):
-        return self.data.get(key, default)
-
-class StateFile:
+class StateFile(BaseFile):
     _state_dir = Path(PlatformDirs(appname=APP_NAME, appauthor=False).user_state_dir)
     def __init__(self, filename: str):
-        self.path = self._state_dir / filename
-        self.data = self._load()
-
-    def _load(self) -> dict:
-        if not os.path.exists(self.path):
-            return {}
-        try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                v = json.load(f)
-            return v if isinstance(v, dict) else {}
-        except (json.JSONDecodeError, OSError):
-            return {}
-
-    def save(self) -> None:
-        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self.data, f, indent=2, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, self.path)
-
-    def get(self, key, default=None):
-        return self.data.get(key, default)
-
-    def set(self, key, value):
-        self.data[key] = value
-        self.save()
+        super().__init__(self._state_dir, filename)
