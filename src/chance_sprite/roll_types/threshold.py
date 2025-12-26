@@ -8,6 +8,7 @@ import discord
 from discord import ui
 from discord import app_commands
 from .common import RollResult, Glitch
+from ..emojis.emoji_manager import EmojiPacks
 
 
 @dataclass(frozen=True)
@@ -47,10 +48,10 @@ class ThresholdResult:
             color = 0xCC44CC if succ else 0xCC4444
         return color
 
-    def build_view(self, label: str) -> ui.LayoutView:
+    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
         container = RollResult.build_header(label, self.result_color)
 
-        dice = self.result.render_roll()
+        dice = self.result.render_roll(emoji_packs=emoji_packs)
         if self.threshold:
             dice += f" vs ({self.threshold})"
         glitch = self.result.render_glitch()
@@ -85,7 +86,11 @@ def register(group: app_commands.Group) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ThresholdResult.roll(dice=int(dice), threshold=threshold or 0, limit=limit or 0, gremlins=gremlins or 0)
-        await interaction.response.send_message(view=result.build_view(label))
+        emoji_packs = interaction.client.emoji_packs
+        if emoji_packs:
+            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
+        else:
+            await interaction.response.send_message("Still loading emojis, please wait!")
 
         # Todo: Add buttons
         _msg = await interaction.original_response()

@@ -9,6 +9,7 @@ from discord import ui
 from discord import app_commands
 
 from .common import RollResult, Glitch
+from ..emojis.emoji_manager import EmojiPacks
 
 
 @dataclass(frozen=True)
@@ -83,13 +84,13 @@ class SpellcastResult:
             drain=drain,
         )
 
-    def build_view(self, label: str) -> ui.LayoutView:
+    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
         container = RollResult.build_header(label+f"\nForce {self.force}", self.result_color)
 
         # Spellcasting line: show raw hits and limited hits
         cast_line = (
             f"**Spellcasting:**\n"
-            + self.cast.render_roll_with_glitch()
+            + self.cast.render_roll_with_glitch(emoji_packs=emoji_packs)
         )
         container.add_item(ui.TextDisplay(cast_line))
         container.add_item(ui.Separator())
@@ -97,7 +98,7 @@ class SpellcastResult:
         # Drain line: threshold-style
         drain_line = (
             f"**Drain:** \n"
-            + self.drain.render_roll() + f" vs. DV{self.drain_value}"
+            + self.drain.render_roll(emoji_packs=emoji_packs) + f" vs. DV{self.drain_value}"
             + self.drain.render_glitch()
         )
         container.add_item(ui.TextDisplay(drain_line))
@@ -138,5 +139,9 @@ def register(group: app_commands.Group) -> None:
             drain_dice=int(drain_dice),
             limit=int(limit) if limit is not None else None,
         )
-        await interaction.response.send_message(view=result.build_view(label))
+        emoji_packs = interaction.client.emoji_packs
+        if emoji_packs:
+            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
+        else:
+            await interaction.response.send_message("Still loading emojis, please wait!")
         _msg = await interaction.original_response()

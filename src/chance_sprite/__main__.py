@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 import sys
 
 from .discord_sprite import DiscordSprite
@@ -15,4 +17,10 @@ def main() -> None:
     bot.run(token)
 
 if __name__ == "__main__":
+    # Set up logging from env
+    level = os.getenv("LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+    )
     main()

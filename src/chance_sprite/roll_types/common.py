@@ -7,8 +7,10 @@ from enum import Enum
 from typing import Iterable, List, Optional
 
 import discord
-from discord import ui
+from discord import ui, Client
 from discord import app_commands
+
+from chance_sprite.emojis.emoji_manager import EmojiPacks
 
 _default_random = random.Random()
 
@@ -84,8 +86,8 @@ class RollResult:
         return container
 
 
-    def render_dice(self, *, max_dice: int = MAX_EMOJI_DICE) -> str:
-        emojis = D6_EX_EMOJIS if self.explode else D6_EMOJIS
+    def render_dice(self, *, emoji_packs: EmojiPacks) -> str:
+        emojis = emoji_packs.d6_ex if self.explode else emoji_packs.d6
         
         shown = self.rolls[:MAX_EMOJI_DICE]
         hidden = len(self.rolls) - len(shown)
@@ -103,8 +105,8 @@ class RollResult:
         if self.glitch == Glitch.NONE:
             return ""
 
-    def render_roll(self, *, max_dice: int = MAX_EMOJI_DICE):
-        line = f"`{self.dice}d6`" + self.render_dice()
+    def render_roll(self, *, emoji_packs: EmojiPacks):
+        line = f"`{self.dice}d6`" + self.render_dice(emoji_packs=emoji_packs)
         if self.limit>0:
             if self.dice_hits > self.limit:
                 line += f" ~~{self.hits} hit{'' if self.dice_hits == 1 else 's'}~~ limit **{self.limit}**"
@@ -113,15 +115,15 @@ class RollResult:
         else:
             line += f" **{self.hits}** hit{'' if self.hits == 1 else 's'}"
         return line
-    def render_roll_with_glitch(self, *, max_dice: int = MAX_EMOJI_DICE):
-        line = self.render_roll(max_dice=max_dice)
+
+    def render_roll_with_glitch(self, *, emoji_packs: EmojiPacks):
+        line = self.render_roll(emoji_packs=emoji_packs)
         line += self.render_glitch()
         return line
 
-    def build_view(self, label: str) -> ui.LayoutView:
+    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
         container = self.build_header(label, 0x8888FF)
-
-        dice = self.render_roll_with_glitch()
+        dice = self.render_roll_with_glitch(emoji_packs=emoji_packs)
         container.add_item(ui.TextDisplay(dice))
 
         view = ui.LayoutView(timeout=None)
@@ -145,7 +147,10 @@ def register(group: app_commands.Group) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = RollResult.roll(dice=int(dice), limit=limit or 0, gremlins=gremlins or 0)
-        await interaction.response.send_message(view=result.build_view(label))
-
+        emoji_packs = interaction.client.emoji_packs
+        if emoji_packs:
+            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
+        else:
+            await interaction.response.send_message("Still loading emojis, please wait!")
         # Todo: Add buttons
         _msg = await interaction.original_response()

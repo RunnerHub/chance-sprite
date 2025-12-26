@@ -9,6 +9,7 @@ from discord import app_commands
 from discord import ui
 
 from .common import RollResult
+from ..emojis.emoji_manager import EmojiPacks
 
 
 @dataclass(frozen=True)
@@ -66,7 +67,7 @@ class ExtendedResult:
             gremlins=gremlins
         )
 
-    def build_view(self, label: str) -> ui.LayoutView:
+    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
         accent = 0x88FF88 if self.succeeded else 0xFF8888
         container = RollResult.build_header(label, accent)
 
@@ -83,7 +84,7 @@ class ExtendedResult:
         prev = 0
         for it in self.iterations:
             blocks.append(
-                f"`{it.roll.dice}d6` {it.roll.render_dice()} [{prev}+**{it.roll.hits}**=**{it.cumulative_hits}**]"
+                f"`{it.roll.dice}d6` {it.roll.render_dice(emoji_packs=emoji_packs)} [{prev}+**{it.roll.hits}**=**{it.cumulative_hits}**]"
             )
             prev = it.cumulative_hits
 
@@ -131,7 +132,11 @@ def register(group: app_commands.Group) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ExtendedResult.roll(int(dice), int(threshold), int(max_iters), limit=limit or 0, gremlins=gremlins or 0)
-        await interaction.response.send_message(view=result.build_view(label))
+        emoji_packs = interaction.client.emoji_packs
+        if emoji_packs:
+            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
+        else:
+            await interaction.response.send_message("Still loading emojis, please wait!")
 
         # Todo: Add buttons
         _msg = await interaction.original_response()

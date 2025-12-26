@@ -8,6 +8,7 @@ import discord
 from discord import ui
 from discord import app_commands
 from .common import RollResult, Glitch
+from ..emojis.emoji_manager import EmojiPacks
 
 
 @dataclass(frozen=True)
@@ -36,7 +37,7 @@ class OpposedResult:
         return OpposedResult(initiator=initiator, defender=defender)
 
 
-    def build_view(self, label: str) -> ui.LayoutView:
+    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
         # Color by outcome
         net = self.net_hits
         if net > 0:
@@ -49,11 +50,11 @@ class OpposedResult:
         container = RollResult.build_header(label, accent)
     
         # Initiator block
-        container.add_item(ui.TextDisplay(f"**Initiator:**\n{self.initiator.render_roll_with_glitch()}"))
+        container.add_item(ui.TextDisplay(f"**Initiator:**\n{self.initiator.render_roll_with_glitch(emoji_packs=emoji_packs)}"))
 
         container.add_item(ui.Separator())
         # Defender block
-        container.add_item(ui.TextDisplay(f"**Defender:**\n{self.defender.render_roll_with_glitch()}"))
+        container.add_item(ui.TextDisplay(f"**Defender:**\n{self.defender.render_roll_with_glitch(emoji_packs=emoji_packs)}"))
 
         # Outcome
         container.add_item(ui.Separator())
@@ -88,8 +89,12 @@ def register(group: app_commands.Group) -> None:
         initiator_gremlins: Optional[app_commands.Range[int, 1, 99]] = None,
         defender_gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
-        result = OpposedResult.roll(int(initiator_dice), int(defender_dice), initiator_limit=initiator_limit, defender_limit=defender_limit, initiator_gremlins=initiator_gremlins, defender_gremlins=defender_gremlins)
-        await interaction.response.send_message(view=result.build_view(label))
+        result = OpposedResult.roll(int(initiator_dice), int(defender_dice), initiator_limit=initiator_limit or 0, defender_limit=defender_limit or 0, initiator_gremlins=initiator_gremlins or 0, defender_gremlins=defender_gremlins or 0)
+        emoji_packs = interaction.client.emoji_packs
+        if emoji_packs:
+            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
+        else:
+            await interaction.response.send_message("Still loading emojis, please wait!")
 
         # Todo: Add buttons
         _msg = await interaction.original_response()

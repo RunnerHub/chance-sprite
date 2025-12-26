@@ -9,6 +9,7 @@ from discord import ui
 from discord import app_commands
 
 from .common import RollResult, Glitch
+from ..emojis.emoji_manager import EmojiPacks
 
 
 @dataclass(frozen=True)
@@ -84,13 +85,13 @@ class SummonResult:
             drain=drain,
         )
 
-    def build_view(self, label: str) -> ui.LayoutView:
+    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
         container = RollResult.build_header(label + f"\nForce {self.force}", self.result_color)
 
-        summon_line = "**Summoning:**\n" + self.summon.render_roll_with_glitch()
+        summon_line = "**Summoning:**\n" + self.summon.render_roll_with_glitch(emoji_packs=emoji_packs)
         container.add_item(ui.TextDisplay(summon_line))
 
-        resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch()
+        resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch(emoji_packs=emoji_packs)
         container.add_item(ui.TextDisplay(resist_line))
 
         if self.succeeded:
@@ -148,5 +149,9 @@ def register(group: app_commands.Group) -> None:
             limit=limit or 0,
             drain_adjust=int(drain_adjust),
         )
-        await interaction.response.send_message(view=result.build_view(label))
+        emoji_packs = interaction.client.emoji_packs
+        if emoji_packs:
+            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
+        else:
+            await interaction.response.send_message("Still loading emojis, please wait!")
         _msg = await interaction.original_response()
