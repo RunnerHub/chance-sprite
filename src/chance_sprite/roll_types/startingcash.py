@@ -60,8 +60,8 @@ class StartingCashResult:
         dice = self.result.render_dice(emoji_packs=emoji_packs)
         total = self.result.total_roll
         nuyen = self.result.total_roll * self.lifestyle.mult
-        dice_line = f"`{self.result.dice}d6`{dice} Total: **{total}**"
-        outcome = f"# ¥{nuyen}"
+        dice_line = f"`{self.result.dice}d6`{dice} Total: **{total}** × {self.lifestyle.mult}¥"
+        outcome = f"# =¥{nuyen}"
 
         container.add_item(ui.TextDisplay(dice_line))
         container.add_item(ui.TextDisplay(outcome))
