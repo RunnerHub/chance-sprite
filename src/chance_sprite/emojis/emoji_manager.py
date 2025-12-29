@@ -14,6 +14,9 @@ log = logging.getLogger(__name__)
 class EmojiPacks:
     d6: list[str]
     d6_ex: list[str]
+    edge: list[str]
+    glitch: str
+    critglitch: str
 
 class EmojiManager:
     """
@@ -78,10 +81,15 @@ class EmojiManager:
 
         d6_names = ["d6r1", "d6r2", "d6r3", "d6r4", "d6r5", "d6r6"]
         d6_ex_names = ["d6r1", "d6r2", "d6r3", "d6r4", "d6r5", "d6r6ex"]
+        edge_names = ["reroll"]
 
         packs = EmojiPacks(
             d6=[req(n) for n in d6_names],
             d6_ex=[req(n) for n in d6_ex_names],
+            edge=[req(n) for n in edge_names],
+            glitch = req("glitch"),
+            critglitch = req("critglitch")
+
         )
         self.packs = packs
         return packs

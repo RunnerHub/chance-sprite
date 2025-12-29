@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
-from typing import Iterable, List, Optional
+from typing import List, Optional
 
 import discord
-from discord import ui, Client
 from discord import app_commands
+from discord import ui, ButtonStyle
 
 from chance_sprite.emojis.emoji_manager import EmojiPacks
 
@@ -19,26 +19,94 @@ class Glitch(Enum):
     GLITCH = "glitch"
     CRITICAL = "critical"
 
-D6_EMOJIS = [
-    "<:d6r1:1447759071745937438>",
-    "<:d6r2:1447759070420537456>",
-    "<:d6r3:1447759069124497492>",
-    "<:d6r4:1447759074954444812>",
-    "<:d6r5:1447759074119778396>",
-    "<:d6r6:1447759073096368149>",
-]
-
-D6_EX_EMOJIS = [
-    "<:d6r1:1447759071745937438>",
-    "<:d6r2:1447759070420537456>",
-    "<:d6r3:1447759069124497492>",
-    "<:d6r4:1447759074954444812>",
-    "<:d6r5:1447759074119778396>",
-    "<:d6r6ex:1447759092771852288>",
-]
-
 MAX_EMOJI_DICE = 120  # Guard against content limit (~27 characters per emoji, 4096 characters max)
+# TODO: per-post limit instead of per-roll
 
+class RollResultView(ui.LayoutView):
+    def __init__(self,  roll_result:RollResult, label: str, *, emoji_packs: EmojiPacks | None, roller_id: int | None = None):
+        super().__init__(timeout=None)
+        self.result = roll_result
+        self.roller_id = roller_id
+        self.label = label
+        self.emoji_packs = emoji_packs
+        self._build()
+
+    def _build(self):
+        container = self.build_header(self.label, 0x8888FF)
+        dice = self.render_roll_with_glitch()
+        dice_section = ui.TextDisplay(dice)
+        if not self.result.rerolled:
+            if self.result.limit <= 0 or self.result.dice_hits < self.result.limit:
+                edge_button = ui.Button(style=ButtonStyle.primary, emoji=self.emoji_packs.edge[0])
+                edge_button.callback = self.on_edge
+                dice_section = ui.Section(dice_section, accessory=edge_button)
+        container.add_item(dice_section)
+        self.add_item(container)
+
+    async def on_edge(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.roller_id:
+            return
+
+        self.result = self.result.reroll_failures()
+        self.clear_items()
+        self._build()
+
+        # Edit the original message that contains this view
+        await interaction.response.edit_message(view=self)
+
+    @staticmethod
+    def build_header(label, colour):
+        container = ui.Container(accent_color=colour)
+        header = label.strip() if label else ""
+        if header:
+            container.add_item(ui.TextDisplay(f"### {header}"))
+            container.add_item(ui.Separator())
+        return container
+
+    def render_dice(self) -> str:
+        emojis = self.emoji_packs.d6_ex if self.result.explode else self.emoji_packs.d6
+
+        shown = self.result.rolls[:MAX_EMOJI_DICE]
+        hidden = len(self.result.rolls) - len(shown)
+
+        line = "".join(emojis[x - 1] for x in shown)
+        if hidden > 0:
+            line += f"\n(+{hidden} more)"
+        return line
+
+    def render_rerolls(self) -> str:
+        emojis = self.emoji_packs.d6
+        line = "".join(emojis[x - 1] for x in self.result.rerolled_dice)
+        return line
+
+    def render_glitch(self):
+        if self.result.glitch == Glitch.GLITCH:
+            return "`!`" + self.emoji_packs.glitch
+        if self.result.glitch == Glitch.CRITICAL:
+            return "`!`" + self.emoji_packs.critglitch
+        return ""
+
+    @staticmethod
+    def render_limit(hits, limit):
+        if limit > 0:
+            if hits > limit:
+                return f" ~~{hits} hit{'' if hits == 1 else 's'}~~ limit **{limit}**"
+            else:
+                return f" **{hits}** hit{'' if hits == 1 else 's'} ~~limit {limit}~~"
+        else:
+            return f" **{hits}** hit{'' if hits == 1 else 's'}"
+
+    def render_roll(self):
+        line = f"`{self.result.dice}d6:`" + self.render_dice()
+        line += self.render_glitch()
+        line += self.render_limit(self.result.dice_hits, self.result.limit)
+        if self.result.rerolled:
+            line += f"\n`edge:`" + self.render_rerolls() + self.render_limit(self.result.dice_hits + self.result.rerolled_hits, self.result.limit)
+        return line
+
+    def render_roll_with_glitch(self):
+        line = self.render_roll()
+        return line
 
 @dataclass(frozen=True)
 class RollResult:
@@ -50,6 +118,9 @@ class RollResult:
     limit: int
     gremlins: int
     explode: bool
+    rerolled: bool = False
+    rerolled_dice: List[int] | None = None
+    rerolled_hits: int | None = None
 
     @property
     def hits(self):
@@ -57,7 +128,6 @@ class RollResult:
             return min(self.limit, self.dice_hits)
         else:
             return self.dice_hits
-
 
     @staticmethod
     def roll(dice: int, *, limit: int = 0, gremlins: int = 0, explode: bool = False, rng: random.Random = _default_random) -> RollResult:
@@ -76,59 +146,12 @@ class RollResult:
 
         return RollResult(dice=dice, rolls=rolls, ones=ones, dice_hits=dice_hits, glitch=glitch, limit=limit, gremlins=gremlins, explode=explode)
 
-    @staticmethod
-    def build_header(label, colour):
-        container = ui.Container(accent_color=colour)
-        header = label.strip() if label else ""
-        if header:
-            container.add_item(ui.TextDisplay(f"### {header}"))
-            container.add_item(ui.Separator())
-        return container
+    def reroll_failures(self, rng: random.Random = _default_random):
+        rerolls = [rng.randint(1, 6) for _ in range(self.dice - self.dice_hits)]
+        new_hits = sum(1 for r in rerolls if r in (5, 6))
 
+        return replace(self, rerolled=True, rerolled_dice=rerolls, rerolled_hits=new_hits)
 
-    def render_dice(self, *, emoji_packs: EmojiPacks) -> str:
-        emojis = emoji_packs.d6_ex if self.explode else emoji_packs.d6
-        
-        shown = self.rolls[:MAX_EMOJI_DICE]
-        hidden = len(self.rolls) - len(shown)
-
-        line = "".join(emojis[x - 1] for x in shown)
-        if hidden > 0:
-            line += f"\n(+{hidden} more)"
-        return line
-
-    def render_glitch(self):
-        if self.glitch == Glitch.GLITCH:
-            return "```diff\n-Glitch!```"
-        if self.glitch == Glitch.CRITICAL:
-            return "```diff\n-Critical Glitch!```"
-        if self.glitch == Glitch.NONE:
-            return ""
-
-    def render_roll(self, *, emoji_packs: EmojiPacks):
-        line = f"`{self.dice}d6`" + self.render_dice(emoji_packs=emoji_packs)
-        if self.limit>0:
-            if self.dice_hits > self.limit:
-                line += f" ~~{self.hits} hit{'' if self.dice_hits == 1 else 's'}~~ limit **{self.limit}**"
-            else:
-                line += f" **{self.hits}** hit{'' if self.dice_hits == 1 else 's'} ~~limit {self.limit}~~"
-        else:
-            line += f" **{self.hits}** hit{'' if self.hits == 1 else 's'}"
-        return line
-
-    def render_roll_with_glitch(self, *, emoji_packs: EmojiPacks):
-        line = self.render_roll(emoji_packs=emoji_packs)
-        line += self.render_glitch()
-        return line
-
-    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
-        container = self.build_header(label, 0x8888FF)
-        dice = self.render_roll_with_glitch(emoji_packs=emoji_packs)
-        container.add_item(ui.TextDisplay(dice))
-
-        view = ui.LayoutView(timeout=None)
-        view.add_item(container)
-        return view
 
 
 def register(group: app_commands.Group) -> None:
@@ -149,7 +172,8 @@ def register(group: app_commands.Group) -> None:
         result = RollResult.roll(dice=int(dice), limit=limit or 0, gremlins=gremlins or 0)
         emoji_packs = interaction.client.emoji_packs
         if emoji_packs:
-            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
+            view = RollResultView(result, label, emoji_packs=emoji_packs, roller_id=interaction.user.id)
+            await interaction.response.send_message(view=view)
         else:
             await interaction.response.send_message("Still loading emojis, please wait!")
         # Todo: Add buttons
