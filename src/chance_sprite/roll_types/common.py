@@ -50,6 +50,7 @@ class RollResult:
     limit: int
     gremlins: int
     explode: bool
+    total_roll: int
 
     @property
     def hits(self):
@@ -69,12 +70,13 @@ class RollResult:
         rolls = [rng.randint(1, 6) for _ in range(dice)]
         ones = sum(1 for r in rolls if r == 1)
         dice_hits = sum(1 for r in rolls if r in (5, 6))
+        total_roll = sum(r for r in rolls)
 
         glitch = Glitch.NONE
         if ones * 2 + gremlins > dice:
             glitch = Glitch.CRITICAL if dice_hits == 0 else Glitch.GLITCH
 
-        return RollResult(dice=dice, rolls=rolls, ones=ones, dice_hits=dice_hits, glitch=glitch, limit=limit, gremlins=gremlins, explode=explode)
+        return RollResult(dice=dice, rolls=rolls, ones=ones, dice_hits=dice_hits, glitch=glitch, limit=limit, gremlins=gremlins, explode=explode, total_roll=total_roll)
 
     @staticmethod
     def build_header(label, colour):
