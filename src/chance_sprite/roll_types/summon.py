@@ -107,7 +107,7 @@ class SummonResult:
 
         drain_line = (
             "**Drain Resistance:**\n"
-            + self.drain.render_roll()
+            + self.drain.render_roll(emoji_packs=emoji_packs)
             + f" vs. DV{self.drain_value}{dv_note}"
             + self.drain.render_glitch()
         )
