@@ -7,32 +7,32 @@ from typing import Optional
 import discord
 from discord import ui
 from discord import app_commands
-from .common import RollResult, Glitch
+from .common import HitsResult, Glitch, build_header, BuildViewFn
 from ..emojis.emoji_manager import EmojiPacks
 
 
 @dataclass(frozen=True)
 class ThresholdResult:
-    result: RollResult
+    result: HitsResult
     threshold: int
 
     @property
     def succeeded(self) -> Optional[bool]:
         if self.threshold <= 0:
             return None
-        return self.result.hits >= self.threshold
+        return self.result.hits_limited >= self.threshold
 
     @property
     def net_hits(self) -> int:
         if self.threshold <= 0:
             return 0
-        return self.result.hits - self.threshold
+        return self.result.hits_limited - self.threshold
 
     @staticmethod
     def roll(dice: int, threshold: int, *, limit: int = 0, gremlins: int = 0) -> ThresholdResult:
         if threshold < 0:
             raise ValueError("threshold must be >= 0")
-        return ThresholdResult(result=RollResult.roll(dice, limit=limit, gremlins=gremlins), threshold=threshold)
+        return ThresholdResult(result=HitsResult.roll(dice, limit=limit, gremlins=gremlins), threshold=threshold)
 
     @property
     def result_color(self) -> int:
@@ -48,24 +48,26 @@ class ThresholdResult:
             color = 0xCC44CC if succ else 0xCC4444
         return color
 
-    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
-        container = RollResult.build_header(label, self.result_color)
+    def build_view(self, label: str) -> BuildViewFn:
+        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
+            container = build_header(label, self.result_color)
 
-        dice = self.result.render_roll(emoji_packs=emoji_packs)
-        if self.threshold:
-            dice += f" vs ({self.threshold})"
-        glitch = self.result.render_glitch()
-        if glitch:
-            dice += "\n" + glitch
-        container.add_item(ui.TextDisplay(dice))
+            dice = self.result.render_roll(emoji_packs=emoji_packs)
+            if self.threshold:
+                dice += f" vs ({self.threshold})"
+            glitch = self.result.render_glitch(emoji_packs=emoji_packs)
+            if glitch:
+                dice += "\n" + glitch
+            container.add_item(ui.TextDisplay(dice))
 
-        if self.threshold > 0:
-            outcome = "Succeeded!" if self.succeeded else "Failed!"
-            container.add_item(ui.TextDisplay(f"**{outcome}** ({self.net_hits:+d} net)"))
+            if self.threshold > 0:
+                outcome = "Succeeded!" if self.succeeded else "Failed!"
+                container.add_item(ui.TextDisplay(f"**{outcome}** ({self.net_hits:+d} net)"))
 
-        view = ui.LayoutView(timeout=None)
-        view.add_item(container)
-        return view
+            view = ui.LayoutView(timeout=None)
+            view.add_item(container)
+            return view
+        return _build
 
 
 def register(group: app_commands.Group) -> None:
@@ -86,11 +88,4 @@ def register(group: app_commands.Group) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ThresholdResult.roll(dice=int(dice), threshold=threshold or 0, limit=limit or 0, gremlins=gremlins or 0)
-        emoji_packs = interaction.client.emoji_packs
-        if emoji_packs:
-            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
-        else:
-            await interaction.response.send_message("Still loading emojis, please wait!")
-
-        # Todo: Add buttons
-        _msg = await interaction.original_response()
+        interaction.client.send_with_emojis(interaction, result.build_view(label))

@@ -10,7 +10,7 @@ from discord import app_commands
 from discord import ui
 from discord.app_commands import Choice
 
-from .common import RollResult, Glitch
+from .common import HitsResult, Glitch, AdditiveResult, BuildViewFn, build_header
 from ..emojis.emoji_manager import EmojiPacks
 
 
@@ -47,28 +47,30 @@ class LifestyleStartingCash(Enum):
 
 @dataclass(frozen=True)
 class StartingCashResult:
-    result: RollResult
+    result: HitsResult
     lifestyle: LifestyleStartingCash
 
     @staticmethod
     def roll(lifestyle: LifestyleStartingCash) -> StartingCashResult:
-        return StartingCashResult(result=RollResult.roll(lifestyle.dice), lifestyle=lifestyle)
+        return StartingCashResult(result=AdditiveResult.roll(lifestyle.dice), lifestyle=lifestyle)
 
-    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
-        container = RollResult.build_header(f"{self.lifestyle.label} lifestyle starting cash\n{label}", self.lifestyle.color)
+    def build_view(self, label: str) -> BuildViewFn:
+        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
+            container = build_header(f"{self.lifestyle.label} lifestyle starting cash\n{label}", self.lifestyle.color)
 
-        dice = self.result.render_dice(emoji_packs=emoji_packs)
-        total = self.result.total_roll
-        nuyen = self.result.total_roll * self.lifestyle.mult
-        dice_line = f"`{self.result.dice}d6`{dice} Total: **{total}** × {self.lifestyle.mult}¥"
-        outcome = f"# =¥{nuyen}"
+            dice = self.result.render_dice(emoji_packs=emoji_packs)
+            total = self.result.total_roll
+            nuyen = self.result.total_roll * self.lifestyle.mult
+            dice_line = f"`{self.result.dice}d6`{dice} Total: **{total}** × {self.lifestyle.mult}¥"
+            outcome = f"# =¥{nuyen}"
 
-        container.add_item(ui.TextDisplay(dice_line))
-        container.add_item(ui.TextDisplay(outcome))
+            container.add_item(ui.TextDisplay(dice_line))
+            container.add_item(ui.TextDisplay(outcome))
 
-        view = ui.LayoutView(timeout=None)
-        view.add_item(container)
-        return view
+            view = ui.LayoutView(timeout=None)
+            view.add_item(container)
+            return view
+        return _build
 
 
 def register(group: app_commands.Group) -> None:
@@ -89,11 +91,4 @@ def register(group: app_commands.Group) -> None:
         lifestyle: app_commands.Choice[str]
     ) -> None:
         result = StartingCashResult.roll(lifestyle=LifestyleStartingCash[lifestyle.value])
-        emoji_packs = interaction.client.emoji_packs
-        if emoji_packs:
-            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
-        else:
-            await interaction.response.send_message("Still loading emojis, please wait!")
-
-        # Todo: Add buttons
-        _msg = await interaction.original_response()
+        interaction.client.send_with_emojis(interaction, result.build_view(label))

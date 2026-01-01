@@ -8,7 +8,7 @@ import discord
 from discord import ui
 from discord import app_commands
 
-from .common import RollResult, Glitch
+from .common import HitsResult, Glitch, BuildViewFn, build_header
 from ..emojis.emoji_manager import EmojiPacks
 
 
@@ -20,13 +20,13 @@ class BindResult:
     drain_adjust: int
 
     # Rolls
-    bind: RollResult
-    resist: RollResult
-    drain: RollResult
+    bind: HitsResult
+    resist: HitsResult
+    drain: HitsResult
 
     @property
     def net_hits(self) -> int:
-        return self.bind.hits - self.resist.hits
+        return self.bind.hits_limited - self.resist.hits_limited
 
     @property
     def succeeded(self) -> bool:
@@ -40,11 +40,11 @@ class BindResult:
 
     @property
     def drain_value(self) -> int:
-        return max(0, max(2, 2 * self.resist.hits) + self.drain_adjust)
+        return max(0, max(2, 2 * self.resist.hits_limited) + self.drain_adjust)
 
     @property
     def drain_taken(self) -> int:
-        return max(0, self.drain_value - self.drain.hits)
+        return max(0, self.drain_value - self.drain.hits_limited)
 
     @property
     def bind_cost(self) -> int:
@@ -82,9 +82,9 @@ class BindResult:
     ) -> BindResult:
         lim = limit or force
 
-        bind = RollResult.roll(bind_dice, limit=int(lim))
-        resist = RollResult.roll(force * 2)
-        drain = RollResult.roll(drain_dice)
+        bind = HitsResult.roll(bind_dice, limit=int(lim))
+        resist = HitsResult.roll(force * 2)
+        drain = HitsResult.roll(drain_dice)
 
         return BindResult(
             force=int(force),
@@ -95,43 +95,45 @@ class BindResult:
             drain=drain,
         )
 
-    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
-        container = RollResult.build_header(label + f"\nForce {self.force} | **Binding Cost:** {self.bind_cost} reagents, 1 service", self.result_color)
+    def build_view(self, label: str) -> BuildViewFn:
+        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
+            container = build_header(label + f"\nForce {self.force} | **Binding Cost:** {self.bind_cost} reagents, 1 service", self.result_color)
 
-        bind_line = "**Binding:**\n" + self.bind.render_roll_with_glitch()
-        container.add_item(ui.TextDisplay(bind_line))
+            bind_line = "**Binding:**\n" + self.bind.render_roll_with_glitch(emoji_packs=emoji_packs)
+            container.add_item(ui.TextDisplay(bind_line))
 
-        resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch()
-        container.add_item(ui.TextDisplay(resist_line))
+            resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch(emoji_packs=emoji_packs)
+            container.add_item(ui.TextDisplay(resist_line))
 
-        services_changed = f"Services: **{self.services_in} → {self.services_out}**"
-        if self.succeeded:
-            container.add_item(ui.TextDisplay(f"Bound! Net hits: **{self.net_hits}**. {services_changed}"))
-        else:
-            container.add_item(ui.TextDisplay(f"Binding failed. {services_changed}"))
-        container.add_item(ui.Separator())
+            services_changed = f"Services: **{self.services_in} → {self.services_out}**"
+            if self.succeeded:
+                container.add_item(ui.TextDisplay(f"Bound! Net hits: **{self.net_hits}**. {services_changed}"))
+            else:
+                container.add_item(ui.TextDisplay(f"Binding failed. {services_changed}"))
+            container.add_item(ui.Separator())
 
-        dv_note = ""
-        if self.drain_adjust != 0:
-            sign = "+" if self.drain_adjust > 0 else ""
-            dv_note = f" (adj {sign}{self.drain_adjust})"
+            dv_note = ""
+            if self.drain_adjust != 0:
+                sign = "+" if self.drain_adjust > 0 else ""
+                dv_note = f" (adj {sign}{self.drain_adjust})"
 
-        drain_line = (
-            "**Drain Resistance:**\n"
-            + self.drain.render_roll()
-            + f" vs. DV{self.drain_value}{dv_note}"
-            + self.drain.render_glitch()
-        )
-        container.add_item(ui.TextDisplay(drain_line))
+            drain_line = (
+                "**Drain Resistance:**\n"
+                + self.drain.render_roll(emoji_packs=emoji_packs)
+                + f" vs. DV{self.drain_value}{dv_note}"
+                + self.drain.render_glitch(emoji_packs=emoji_packs)
+            )
+            container.add_item(ui.TextDisplay(drain_line))
 
-        if self.drain_taken > 0:
-            container.add_item(ui.TextDisplay(f"Took **{self.drain_taken}** Drain!"))
-        else:
-            container.add_item(ui.TextDisplay("Resisted Drain!"))
+            if self.drain_taken > 0:
+                container.add_item(ui.TextDisplay(f"Took **{self.drain_taken}** Drain!"))
+            else:
+                container.add_item(ui.TextDisplay("Resisted Drain!"))
 
-        view = ui.LayoutView(timeout=None)
-        view.add_item(container)
-        return view
+            view = ui.LayoutView(timeout=None)
+            view.add_item(container)
+            return view
+        return _build
 
 
 def register(group: app_commands.Group) -> None:
@@ -164,8 +166,4 @@ def register(group: app_commands.Group) -> None:
             drain_adjust=int(drain_adjust),
         )
         emoji_packs = interaction.client.emoji_packs
-        if emoji_packs:
-            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
-        else:
-            await interaction.response.send_message("Still loading emojis, please wait!")
-        _msg = await interaction.original_response()
+        interaction.client.send_with_emojis(interaction, result.build_view(label))

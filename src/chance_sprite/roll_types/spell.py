@@ -8,7 +8,7 @@ import discord
 from discord import ui
 from discord import app_commands
 
-from .common import RollResult, Glitch
+from .common import HitsResult, Glitch, build_header, BuildViewFn
 from ..emojis.emoji_manager import EmojiPacks
 
 
@@ -20,25 +20,25 @@ class SpellcastResult:
     drain_value: int
 
     # Rolls
-    cast: RollResult
-    drain: RollResult
+    cast: HitsResult
+    drain: HitsResult
 
     @property
     def cast_hits_limited(self) -> int:
-        return min(self.cast.hits, max(self.limit, 1))
+        return min(self.cast.hits_limited, max(self.limit, 1))
 
     @property
     def drain_succeeded(self) -> Optional[bool]:
         # drain value is a threshold; 0 means no test outcome
         if self.drain_value <= 0:
             return None
-        return self.drain.hits >= self.drain_value
+        return self.drain.hits_limited >= self.drain_value
 
     @property
     def drain_net_hits(self) -> int:
         if self.drain_value <= 0:
             return 0
-        return self.drain.hits - self.drain_value
+        return self.drain.hits_limited - self.drain_value
 
     @property
     def result_color(self) -> int:
@@ -73,8 +73,8 @@ class SpellcastResult:
     ) -> SpellcastResult:
         lim = force if limit is None else limit
 
-        cast = RollResult.roll(cast_dice, limit=limit or 0)
-        drain = RollResult.roll(drain_dice)
+        cast = HitsResult.roll(cast_dice, limit=limit or 0)
+        drain = HitsResult.roll(drain_dice)
 
         return SpellcastResult(
             force=force,
@@ -84,33 +84,35 @@ class SpellcastResult:
             drain=drain,
         )
 
-    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
-        container = RollResult.build_header(label+f"\nForce {self.force}", self.result_color)
+    def build_view(self, label: str) -> BuildViewFn:
+        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
+            container = build_header(label + f"\nForce {self.force}", self.result_color)
 
-        # Spellcasting line: show raw hits and limited hits
-        cast_line = (
-            f"**Spellcasting:**\n"
-            + self.cast.render_roll_with_glitch(emoji_packs=emoji_packs)
-        )
-        container.add_item(ui.TextDisplay(cast_line))
-        container.add_item(ui.Separator())
+            # Spellcasting line: show raw hits and limited hits
+            cast_line = (
+                f"**Spellcasting:**\n"
+                + self.cast.render_roll_with_glitch(emoji_packs=emoji_packs)
+            )
+            container.add_item(ui.TextDisplay(cast_line))
+            container.add_item(ui.Separator())
 
-        # Drain line: threshold-style
-        drain_line = (
-            f"**Drain:** \n"
-            + self.drain.render_roll(emoji_packs=emoji_packs) + f" vs. DV{self.drain_value}"
-            + self.drain.render_glitch()
-        )
-        container.add_item(ui.TextDisplay(drain_line))
+            # Drain line: threshold-style
+            drain_line = (
+                f"**Drain:** \n"
+                + self.drain.render_roll(emoji_packs=emoji_packs) + f" vs. DV{self.drain_value}"
+                + self.drain.render_glitch(emoji_packs=emoji_packs)
+            )
+            container.add_item(ui.TextDisplay(drain_line))
 
-        # Outcome text (drain)
-        if self.drain_value > 0:
-            outcome = "Resisted Drain!" if self.drain_succeeded else f"Took **{-self.drain_net_hits}** Drain!"
-            container.add_item(ui.TextDisplay(outcome))
+            # Outcome text (drain)
+            if self.drain_value > 0:
+                outcome = "Resisted Drain!" if self.drain_succeeded else f"Took **{-self.drain_net_hits}** Drain!"
+                container.add_item(ui.TextDisplay(outcome))
 
-        view = ui.LayoutView(timeout=None)
-        view.add_item(container)
-        return view
+            view = ui.LayoutView(timeout=None)
+            view.add_item(container)
+            return view
+        return _build
 
 
 def register(group: app_commands.Group) -> None:
@@ -139,9 +141,4 @@ def register(group: app_commands.Group) -> None:
             drain_dice=int(drain_dice),
             limit=int(limit) if limit is not None else None,
         )
-        emoji_packs = interaction.client.emoji_packs
-        if emoji_packs:
-            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
-        else:
-            await interaction.response.send_message("Still loading emojis, please wait!")
-        _msg = await interaction.original_response()
+        interaction.client.send_with_emojis(interaction, result.build_view(label))

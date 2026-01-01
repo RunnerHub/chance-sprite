@@ -5,20 +5,21 @@ from dataclasses import dataclass
 from typing import Optional
 
 import discord
-from discord import ui
 from discord import app_commands
-from .common import RollResult, Glitch
+from discord import ui
+
+from .common import HitsResult, BuildViewFn, build_header
 from ..emojis.emoji_manager import EmojiPacks
 
 
 @dataclass(frozen=True)
 class OpposedResult:
-    initiator: RollResult
-    defender: RollResult
+    initiator: HitsResult
+    defender: HitsResult
 
     @property
     def net_hits(self) -> int:
-        return self.initiator.hits - self.defender.hits
+        return self.initiator.hits_limited - self.defender.hits_limited
 
     @property
     def outcome(self) -> str:
@@ -32,40 +33,42 @@ class OpposedResult:
     def roll(initiator_dice: int, defender_dice: int, *,
              initiator_limit: int, defender_limit: int,
              initiator_gremlins: int, defender_gremlins: int) -> OpposedResult:
-        initiator = RollResult.roll(initiator_dice, limit=initiator_limit, gremlins=initiator_gremlins)
-        defender = RollResult.roll(defender_dice, limit=defender_limit, gremlins=defender_gremlins)
+        initiator = HitsResult.roll(initiator_dice, limit=initiator_limit, gremlins=initiator_gremlins)
+        defender = HitsResult.roll(defender_dice, limit=defender_limit, gremlins=defender_gremlins)
         return OpposedResult(initiator=initiator, defender=defender)
 
 
-    def build_view(self, label: str, *, emoji_packs: EmojiPacks | None) -> ui.LayoutView:
-        # Color by outcome
-        net = self.net_hits
-        if net > 0:
-            accent = 0x88FF88
-        elif net < 0:
-            accent = 0xFF8888
-        else:
-            accent = 0x8888FF
-    
-        container = RollResult.build_header(label, accent)
-    
-        # Initiator block
-        container.add_item(ui.TextDisplay(f"**Initiator:**\n{self.initiator.render_roll_with_glitch(emoji_packs=emoji_packs)}"))
+    def build_view(self, label: str) -> BuildViewFn:
+        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
+            # Color by outcome
+            net = self.net_hits
+            if net > 0:
+                accent = 0x88FF88
+            elif net < 0:
+                accent = 0xFF8888
+            else:
+                accent = 0x8888FF
 
-        container.add_item(ui.Separator())
-        # Defender block
-        container.add_item(ui.TextDisplay(f"**Defender:**\n{self.defender.render_roll_with_glitch(emoji_packs=emoji_packs)}"))
+            container = build_header(label, accent)
 
-        # Outcome
-        container.add_item(ui.Separator())
-        if net == 0:
-            container.add_item(ui.TextDisplay("Tie; Defender wins. (0 net hits)"))
-        else:
-            container.add_item(ui.TextDisplay(f"{self.outcome} with **{net:+d}** net hits"))
-    
-        view = ui.LayoutView(timeout=None)
-        view.add_item(container)
-        return view
+            # Initiator block
+            container.add_item(ui.TextDisplay(f"**Initiator:**\n{self.initiator.render_roll_with_glitch(emoji_packs=emoji_packs)}"))
+
+            container.add_item(ui.Separator())
+            # Defender block
+            container.add_item(ui.TextDisplay(f"**Defender:**\n{self.defender.render_roll_with_glitch(emoji_packs=emoji_packs)}"))
+
+            # Outcome
+            container.add_item(ui.Separator())
+            if net == 0:
+                container.add_item(ui.TextDisplay("Tie; Defender wins. (0 net hits)"))
+            else:
+                container.add_item(ui.TextDisplay(f"{self.outcome} with **{net:+d}** net hits"))
+
+            view = ui.LayoutView(timeout=None)
+            view.add_item(container)
+            return view
+        return _build
 
 
 def register(group: app_commands.Group) -> None:
@@ -89,12 +92,12 @@ def register(group: app_commands.Group) -> None:
         initiator_gremlins: Optional[app_commands.Range[int, 1, 99]] = None,
         defender_gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
-        result = OpposedResult.roll(int(initiator_dice), int(defender_dice), initiator_limit=initiator_limit or 0, defender_limit=defender_limit or 0, initiator_gremlins=initiator_gremlins or 0, defender_gremlins=defender_gremlins or 0)
-        emoji_packs = interaction.client.emoji_packs
-        if emoji_packs:
-            await interaction.response.send_message(view=result.build_view(label, emoji_packs=emoji_packs))
-        else:
-            await interaction.response.send_message("Still loading emojis, please wait!")
-
-        # Todo: Add buttons
-        _msg = await interaction.original_response()
+        result = OpposedResult.roll(
+            int(initiator_dice),
+            int(defender_dice),
+            initiator_limit=initiator_limit or 0,
+            defender_limit=defender_limit or 0,
+            initiator_gremlins=initiator_gremlins or 0,
+            defender_gremlins=defender_gremlins or 0
+        )
+        interaction.client.send_with_emojis(interaction, result.build_view(label))
