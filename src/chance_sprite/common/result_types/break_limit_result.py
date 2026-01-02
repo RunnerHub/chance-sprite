@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass, asdict
 from typing import List
 
-from chance_sprite.common.common import _default_random
+from chance_sprite.common.common import _default_random, Glitch
 from chance_sprite.common.result_types.hits_result import HitsResult
 from chance_sprite.emojis.emoji_manager import EmojiPacks
 
@@ -25,7 +25,6 @@ class BreakTheLimitHitsResult(HitsResult):
             return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
 
     def render_roll(self, *, emoji_packs: EmojiPacks):
-        emoji_packs.d6_ex
         line = super().render_roll(emoji_packs=emoji_packs)
         emojis = emoji_packs.d6_ex
         for roll in self.exploded_dice:

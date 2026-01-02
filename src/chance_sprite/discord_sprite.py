@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 
 import discord
-from discord import InteractionMessage
+from discord import ui
 from discord.ext import commands
 
-from chance_sprite.emojis.emoji_manager import EmojiManager, EmojiPacks
 from chance_sprite.common.commonui import BuildViewFn
-from chance_sprite.file_sprite import ConfigFile
+from chance_sprite.emojis.emoji_manager import EmojiManager, EmojiPacks
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +66,7 @@ class DiscordSprite(commands.Bot):
             view = view_builder(emoji_packs)
             await interaction.response.send_message(view=view)
         else:
+            view = ui.LayoutView()
             await interaction.response.send_message("Still loading emojis, please wait!")
         msg = await interaction.original_response()
         return view, msg

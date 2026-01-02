@@ -7,6 +7,7 @@ from discord import ui, ButtonStyle
 
 from chance_sprite.common.common import Glitch
 from chance_sprite.common.commonui import GenericResultAccessor
+from chance_sprite.common.result_types.close_call_result import CloseCallResult
 from chance_sprite.common.result_types.hits_result import HitsResult
 from chance_sprite.common.modals.confirm_modal import ConfirmModal
 from chance_sprite.common.modals.dice_input_modal import DiceInputModal
@@ -109,7 +110,7 @@ class GenericEdgeMenu(ui.LayoutView):
         )
 
     async def on_close_call_confirm(self, interaction: discord.Interaction) -> None:
-        await self.handle_case(lambda r : r.close_call(), interaction)
+        await self.handle_case(lambda r : CloseCallResult.from_hitsresult(r), interaction)
         self.disable_edge_buttons()
 
     async def on_adjust_dice_button(self, interaction: discord.Interaction):

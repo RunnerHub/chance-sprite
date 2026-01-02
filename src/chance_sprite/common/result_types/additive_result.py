@@ -16,7 +16,7 @@ class AdditiveResult:
     total_roll: int
 
     @staticmethod
-    def roll(dice: int, *, rng: random.Random = _default_random) -> HitsResult:
+    def roll(dice: int, *, rng: random.Random = _default_random) -> AdditiveResult:
         rolls = [rng.randint(1, 6) for _ in range(dice)]
         total_roll = sum(r for r in rolls)
         return AdditiveResult(dice=dice, rolls=rolls, total_roll=total_roll)

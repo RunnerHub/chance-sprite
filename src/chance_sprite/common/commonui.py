@@ -8,8 +8,6 @@ from discord import ui
 from chance_sprite.common.result_types.hits_result import HitsResult
 from chance_sprite.emojis.emoji_manager import EmojiPacks
 
-
-@staticmethod
 def build_header(label, colour):
     container = ui.Container(accent_color=colour)
     header = label.strip() if label else ""

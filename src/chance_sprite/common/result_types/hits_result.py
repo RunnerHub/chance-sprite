@@ -37,7 +37,7 @@ class HitsResult:
         ones = sum(1 for r in rolls if r == 1)
         dice_hits = sum(1 for r in rolls if r in (5, 6))
         glitch = Glitch.NONE
-        if ones * 2 + gremlins > dice:
+        if ones + gremlins > dice / 2.0:
             glitch = Glitch.CRITICAL if dice_hits == 0 else Glitch.GLITCH
         return HitsResult(dice=dice, rolls=rolls, ones=ones, dice_hits=dice_hits, glitch=glitch, limit=limit, gremlins=gremlins)
 

@@ -9,7 +9,7 @@ from discord import app_commands
 from discord import ui
 
 from chance_sprite.common.result_types.hits_result import HitsResult
-from ..common.commonui import build_header
+from ..common.commonui import build_header, BuildViewFn
 from ..emojis.emoji_manager import EmojiPacks
 
 

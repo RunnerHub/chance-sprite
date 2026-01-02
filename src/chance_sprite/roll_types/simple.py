@@ -8,6 +8,7 @@ import discord
 from discord import ui, app_commands
 
 from chance_sprite.common.result_types.hits_result import HitsResult
+from chance_sprite.common.result_types.break_limit_result import BreakTheLimitHitsResult
 from ..common.commonui import build_header, BuildViewFn, \
     GenericResultAccessor
 from chance_sprite.common.menus.generic_edge_menu import GenericEdgeMenu

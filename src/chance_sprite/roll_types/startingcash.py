@@ -9,7 +9,6 @@ from discord import app_commands
 from discord import ui
 
 from chance_sprite.common.result_types.additive_result import AdditiveResult
-from chance_sprite.common.result_types.hits_result import HitsResult
 from ..common.commonui import build_header, BuildViewFn
 from ..emojis.emoji_manager import EmojiPacks
 
@@ -42,12 +41,12 @@ class LifestyleStartingCash(Enum):
         return self.value.mult
 
     @property
-    def color(self) -> str:
+    def color(self) -> int:
         return self.value.color
 
 @dataclass(frozen=True)
 class StartingCashResult:
-    result: HitsResult
+    result: AdditiveResult
     lifestyle: LifestyleStartingCash
 
     @staticmethod
