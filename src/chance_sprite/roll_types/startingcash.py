@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable
 
 import discord
 from discord import app_commands
@@ -10,7 +11,7 @@ from discord import ui
 
 from chance_sprite.result_types import AdditiveResult
 from ..emojis.emoji_manager import EmojiPacks, EmojiManager
-from ..ui.commonui import build_header, BuildViewFn
+from ..ui.commonui import build_header
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +54,7 @@ class StartingCashResult:
     def roll(lifestyle: LifestyleStartingCash) -> StartingCashResult:
         return StartingCashResult(result=AdditiveResult.roll(lifestyle.dice), lifestyle=lifestyle)
 
-    def build_view(self, label: str) -> BuildViewFn:
+    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
         def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
             container = build_header(f"{self.lifestyle.label} lifestyle starting cash\n{label}", self.lifestyle.color)
 

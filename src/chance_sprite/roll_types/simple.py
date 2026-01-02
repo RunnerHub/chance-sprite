@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Callable
 
 import discord
 from discord import ui, app_commands
@@ -11,8 +11,7 @@ from chance_sprite.result_types import BreakTheLimitHitsResult
 from chance_sprite.result_types import HitsResult
 from chance_sprite.ui.menus.generic_edge_menu import GenericEdgeMenu
 from ..emojis.emoji_manager import EmojiPacks, EmojiManager
-from ..ui.commonui import build_header, BuildViewFn, \
-    GenericResultAccessor
+from ..ui.commonui import build_header, GenericResultAccessor
 
 log = logging.getLogger(__name__)
 
@@ -60,8 +59,7 @@ class SimpleRollResult:
         else:
             return SimpleRollResult(HitsResult.roll(dice=dice,  limit=limit, gremlins=gremlins))
 
-
-    def build_view(self, label: str)  -> BuildViewFn:
+    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
         def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
             return SimpleResultView(self.result, label, emoji_packs=emoji_packs)
         return _build

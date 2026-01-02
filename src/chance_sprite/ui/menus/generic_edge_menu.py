@@ -55,16 +55,16 @@ class GenericEdgeMenu(ui.LayoutView):
         container.add_item(edge_action_row)
         self.edge_buttons = [second_chance, push_limit, close_call]
 
-        adjust = ui.Button(style=ButtonStyle.primary, label="Adjust Roll")
-        adjust.callback = self.on_adjust_dice_button
+        adjust_dice = ui.Button(style=ButtonStyle.primary, label="Adjust Roll")
+        adjust_dice.callback = self.on_adjust_dice_button
 
-        adjust = ui.Button(style=ButtonStyle.primary, label="Adjust Limit")
-        adjust.callback = self.on_adjust_limit_button
+        adjust_limit = ui.Button(style=ButtonStyle.primary, label="Adjust Limit")
+        adjust_limit.callback = self.on_adjust_limit_button
 
         dismiss = ui.Button(style=ButtonStyle.danger, label="Dismiss")
         dismiss.callback = self.on_dismiss_button
 
-        adjust_action_row = ui.ActionRow(adjust, dismiss)
+        adjust_action_row = ui.ActionRow(adjust_dice, adjust_limit, dismiss)
         container.add_item(adjust_action_row)
 
         self.add_item(container)

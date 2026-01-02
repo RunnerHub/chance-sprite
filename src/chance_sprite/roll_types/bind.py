@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Callable
 
 import discord
 from discord import app_commands
@@ -11,7 +11,7 @@ from discord import ui
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
 from ..emojis.emoji_manager import EmojiPacks, EmojiManager
-from ..ui.commonui import build_header, BuildViewFn
+from ..ui.commonui import build_header
 
 
 @dataclass(frozen=True)
@@ -97,7 +97,7 @@ class BindResult:
             drain=drain,
         )
 
-    def build_view(self, label: str) -> BuildViewFn:
+    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
         def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
             container = build_header(label + f"\nForce {self.force} | **Binding Cost:** {self.bind_cost} reagents, 1 service", self.result_color)
 

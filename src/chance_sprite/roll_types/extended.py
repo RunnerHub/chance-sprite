@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Callable
 
 import discord
 from discord import app_commands
@@ -10,7 +10,7 @@ from discord import ui
 
 from chance_sprite.result_types import HitsResult
 from ..emojis.emoji_manager import EmojiPacks, EmojiManager
-from ..ui.commonui import build_header, BuildViewFn
+from ..ui.commonui import build_header
 
 
 @dataclass(frozen=True)
@@ -63,7 +63,7 @@ class ExtendedResult:
             gremlins=gremlins
         )
 
-    def build_view(self, label: str) -> BuildViewFn:
+    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
         def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
             accent = 0x88FF88 if self.succeeded else 0xFF8888
             container = build_header(label, accent)

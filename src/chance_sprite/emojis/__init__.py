@@ -1,8 +1,8 @@
 # Add all modules in package to importable from package
-__all__ = []
-
 import importlib
 import pkgutil
+
+__all__ = []
 
 for info in pkgutil.iter_modules(__path__):
     # Try importing

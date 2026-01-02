@@ -5,11 +5,10 @@ import imghdr
 import logging
 from dataclasses import dataclass
 from importlib import resources
+from typing import Callable
 
 import discord
 from discord import ui
-
-from chance_sprite.ui.commonui import BuildViewFn
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +73,8 @@ class EmojiManager:
         log.info("Emoji sync complete. Uploaded: %d. Total now: %d", uploaded, len(self.by_name))
 
     def build_packs(self) -> EmojiPacks:
+        if self.packs:
+            return self.packs
         """
         Define your packs by emoji *names*, then resolve to "<:name:id>" strings.
         Fail fast if a required emoji is missing.
@@ -99,7 +100,8 @@ class EmojiManager:
         self.packs = packs
         return packs
 
-    async def send_with_emojis(self, interaction: discord.Interaction, view_builder: BuildViewFn):
+    async def send_with_emojis(self, interaction: discord.Interaction,
+                               view_builder: Callable[[EmojiPacks], ui.LayoutView]):
         if self.packs:
             view = view_builder(self.packs)
             await interaction.response.send_message(view=view)
