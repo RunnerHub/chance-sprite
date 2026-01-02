@@ -9,7 +9,7 @@ class ConfirmModal(ui.Modal):
         super().__init__(title=title, timeout=None)
         self._do_action = do_action      # async (interaction) -> None
         self._on_after = on_after        # async (interaction) -> None
-        confirm = ui.TextDisplay(body)
+        confirm: ui.TextDisplay = ui.TextDisplay(body)
         self.add_item(confirm)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:

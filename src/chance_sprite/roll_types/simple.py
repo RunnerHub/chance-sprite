@@ -7,12 +7,12 @@ from typing import Optional
 import discord
 from discord import ui, app_commands
 
-from chance_sprite.common.result_types.hits_result import HitsResult
-from chance_sprite.common.result_types.break_limit_result import BreakTheLimitHitsResult
-from ..common.commonui import build_header, BuildViewFn, \
+from chance_sprite.result_types import BreakTheLimitHitsResult
+from chance_sprite.result_types import HitsResult
+from chance_sprite.ui.menus.generic_edge_menu import GenericEdgeMenu
+from ..emojis.emoji_manager import EmojiPacks, EmojiManager
+from ..ui.commonui import build_header, BuildViewFn, \
     GenericResultAccessor
-from chance_sprite.common.menus.generic_edge_menu import GenericEdgeMenu
-from ..emojis.emoji_manager import EmojiPacks
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class SimpleRollResult:
 
     @staticmethod
     def roll(dice: int, *, limit: int = 0, gremlins: int = 0, explode: bool) -> SimpleRollResult:
-        if(explode):
+        if explode:
             return SimpleRollResult(BreakTheLimitHitsResult.roll_exploding(dice=dice,  limit=limit, gremlins=gremlins))
         else:
             return SimpleRollResult(HitsResult.roll(dice=dice,  limit=limit, gremlins=gremlins))
@@ -66,7 +66,8 @@ class SimpleRollResult:
             return SimpleResultView(self.result, label, emoji_packs=emoji_packs)
         return _build
 
-def register(group: app_commands.Group) -> None:
+
+def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
     @group.command(name="simple", description="Roll some d6s, Shadowrun-style.")
     @app_commands.describe(
         label="A label to describe the roll.",
@@ -84,7 +85,7 @@ def register(group: app_commands.Group) -> None:
         explode: bool = False
     ) -> None:
         result = SimpleRollResult.roll(dice=int(dice), limit=limit or 0, gremlins=gremlins or 0, explode=explode)
-        primary_view, original_message = await interaction.client.send_with_emojis(interaction, result.build_view(label))
+        primary_view, original_message = await emoji_manager.send_with_emojis(interaction, result.build_view(label))
         edge_menu = GenericEdgeMenu(f"Edge for {label}:", SimpleResultAccessor(primary_view, original_message), lambda i: i == interaction.user.id)
         followup_message = await interaction.followup.send(view=edge_menu, ephemeral=True)
         edge_menu.followup_message = followup_message

@@ -9,7 +9,7 @@ class DiceInputModal(ui.Modal):
         super().__init__(title=title, timeout=None)
         self._do_action = do_action      # async (interaction, extra_dice:int) -> None
         self._on_after = on_after        # async (interaction) -> None
-        self.dice_to_add = ui.TextInput(
+        self.dice_to_add: ui.TextInput = ui.TextInput(
             label=body,
             placeholder="e.g. 3",
             required=True,
@@ -25,11 +25,12 @@ class DiceInputModal(ui.Modal):
         try:
             extra = int(raw)
         except ValueError:
-            await interaction.response.send_message("That isn’t a number.", ephemeral=True)
+            await interaction.response.send_message("That isn’t a number.", ephemeral=True, delete_after=5)
             return
 
         if extra < self.min_val or extra > self.max_val:
-            await interaction.response.send_message(f"Pick a dice count between {min} and {max}.", ephemeral=True)
+            await interaction.response.send_message(f"Pick a dice count between {min} and {max}.", ephemeral=True,
+                                                    delete_after=5)
             return
 
         await self._do_action(interaction, extra)

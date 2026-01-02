@@ -3,9 +3,9 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, asdict
 
-from chance_sprite.common.common import Glitch, _default_random
-from chance_sprite.common.result_types.hits_result import HitsResult
 from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.result_types.hits_result import HitsResult
+from . import _default_random, Glitch
 
 
 @dataclass(frozen=True)

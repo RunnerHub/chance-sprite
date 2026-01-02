@@ -8,9 +8,9 @@ import discord
 from discord import app_commands
 from discord import ui
 
-from chance_sprite.common.result_types.additive_result import AdditiveResult
-from ..common.commonui import build_header, BuildViewFn
-from ..emojis.emoji_manager import EmojiPacks
+from chance_sprite.result_types import AdditiveResult
+from ..emojis.emoji_manager import EmojiPacks, EmojiManager
+from ..ui.commonui import build_header, BuildViewFn
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +72,7 @@ class StartingCashResult:
         return _build
 
 
-def register(group: app_commands.Group) -> None:
+def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
     @group.command(name="startingcash", description="Roll for starting cash.")
     @app_commands.describe(
         label="Who is it for?",
@@ -90,4 +90,4 @@ def register(group: app_commands.Group) -> None:
         lifestyle: app_commands.Choice[str]
     ) -> None:
         result = StartingCashResult.roll(lifestyle=LifestyleStartingCash[lifestyle.value])
-        await interaction.client.send_with_emojis(interaction, result.build_view(label))
+        await emoji_manager.send_with_emojis(interaction, result.build_view(label))

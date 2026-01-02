@@ -5,14 +5,14 @@ from typing import Callable
 import discord
 from discord import ui, ButtonStyle
 
-from chance_sprite.common.common import Glitch
-from chance_sprite.common.commonui import GenericResultAccessor
-from chance_sprite.common.result_types.close_call_result import CloseCallResult
-from chance_sprite.common.result_types.hits_result import HitsResult
-from chance_sprite.common.modals.confirm_modal import ConfirmModal
-from chance_sprite.common.modals.dice_input_modal import DiceInputModal
-from chance_sprite.common.result_types.push_limit_result import PushTheLimitHitsResult
-from chance_sprite.common.result_types.second_chance_result import SecondChanceHitsResult
+from chance_sprite.result_types import Glitch
+from chance_sprite.result_types.close_call_result import CloseCallResult
+from chance_sprite.result_types.hits_result import HitsResult
+from chance_sprite.result_types.push_limit_result import PushTheLimitHitsResult
+from chance_sprite.result_types.second_chance_result import SecondChanceHitsResult
+from chance_sprite.ui.commonui import GenericResultAccessor
+from chance_sprite.ui.modals.confirm_modal import ConfirmModal
+from chance_sprite.ui.modals.dice_input_modal import DiceInputModal
 
 
 class GenericEdgeMenu(ui.LayoutView):
@@ -21,7 +21,7 @@ class GenericEdgeMenu(ui.LayoutView):
         self.result_accessor = result_accessor
         self.is_authorized = is_authorized
         self.title = title
-        self.edge_buttons = []
+        self.edge_buttons: list[ui.Button] = []
         self.followup_message = None
         self._build()
 
@@ -57,6 +57,9 @@ class GenericEdgeMenu(ui.LayoutView):
 
         adjust = ui.Button(style=ButtonStyle.primary, label="Adjust Roll")
         adjust.callback = self.on_adjust_dice_button
+
+        adjust = ui.Button(style=ButtonStyle.primary, label="Adjust Limit")
+        adjust.callback = self.on_adjust_limit_button
 
         dismiss = ui.Button(style=ButtonStyle.danger, label="Dismiss")
         dismiss.callback = self.on_dismiss_button
@@ -128,11 +131,26 @@ class GenericEdgeMenu(ui.LayoutView):
     async def on_adjust_dice_confirm(self, interaction: discord.Interaction, dice: int) -> None:
         await self.handle_case(lambda r : r.adjust_dice(dice), interaction)
 
+    async def on_adjust_limit_button(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            DiceInputModal(
+                title="Adjust limit",
+                body="WIP",  # "Did you make a mistake in calculating modifiers? You can change the dice score here.",
+                do_action=self.on_adjust_limit_confirm,
+                on_after=self._after_use,
+                min_val=-99,
+                max_val=99,
+            )
+        )
+
+    async def on_adjust_limit_confirm(self, interaction: discord.Interaction, limit: int) -> None:
+        await self.handle_case(lambda r: r.adjust_limit(limit), interaction)
+
     async def on_dismiss_button(self, interaction: discord.Interaction):
         if self.followup_message:
             await self.followup_message.delete()
 
-    async def _after_use(self, interaction: discord.Interaction=None):
+    async def _after_use(self, interaction: discord.Interaction | None = None):
         if self.followup_message:
             await self.followup_message.edit(view=self)
         if interaction:

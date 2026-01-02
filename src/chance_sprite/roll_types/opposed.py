@@ -8,9 +8,9 @@ import discord
 from discord import app_commands
 from discord import ui
 
-from chance_sprite.common.result_types.hits_result import HitsResult
-from ..common.commonui import build_header, BuildViewFn
-from ..emojis.emoji_manager import EmojiPacks
+from chance_sprite.result_types import HitsResult
+from ..emojis.emoji_manager import EmojiPacks, EmojiManager
+from ..ui.commonui import build_header, BuildViewFn
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ class OpposedResult:
         return _build
 
 
-def register(group: app_commands.Group) -> None:
+def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
     @group.command(name="opposed", description="Opposed roll: initiator vs defender. Defender wins ties.")
     @app_commands.describe(
         label="A label to describe the roll.",
@@ -101,4 +101,4 @@ def register(group: app_commands.Group) -> None:
             initiator_gremlins=initiator_gremlins or 0,
             defender_gremlins=defender_gremlins or 0
         )
-        await interaction.client.send_with_emojis(interaction, result.build_view(label))
+        await emoji_manager.send_with_emojis(interaction, result.build_view(label))

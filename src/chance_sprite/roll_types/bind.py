@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from typing import Optional
 
 import discord
-from discord import ui
 from discord import app_commands
+from discord import ui
 
-from chance_sprite.common.common import Glitch
-from chance_sprite.common.result_types.hits_result import HitsResult
-from ..common.commonui import build_header, BuildViewFn
-from ..emojis.emoji_manager import EmojiPacks
+from chance_sprite.result_types import Glitch
+from chance_sprite.result_types import HitsResult
+from ..emojis.emoji_manager import EmojiPacks, EmojiManager
+from ..ui.commonui import build_header, BuildViewFn
 
 
 @dataclass(frozen=True)
@@ -138,7 +138,7 @@ class BindResult:
         return _build
 
 
-def register(group: app_commands.Group) -> None:
+def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
     @group.command(name="bind", description="Binding test vs spirit resistance (2×Force) + drain (SR5).")
     @app_commands.describe(
         label="A label to describe the roll (spirit type + prep are a good start).",
@@ -167,4 +167,4 @@ def register(group: app_commands.Group) -> None:
             limit=int(limit) if limit is not None else None,
             drain_adjust=int(drain_adjust),
         )
-        await interaction.client.send_with_emojis(interaction, result.build_view(label))
+        await emoji_manager.send_with_emojis(interaction, result.build_view(label))

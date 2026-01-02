@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 from typing import Callable
 
 from discord import ui
 
-from chance_sprite.common.result_types.hits_result import HitsResult
 from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.result_types.hits_result import HitsResult
+
 
 def build_header(label, colour):
     container = ui.Container(accent_color=colour)
@@ -20,7 +21,7 @@ def build_header(label, colour):
 BuildViewFn = Callable[[EmojiPacks], ui.LayoutView]
 
 
-class GenericResultAccessor:
+class GenericResultAccessor(ABC):
     @abstractmethod
     def get(self) -> HitsResult:
         pass

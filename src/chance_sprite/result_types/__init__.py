@@ -1,9 +1,28 @@
+# chance_sprite/result_types/__init__.py
 from __future__ import annotations
 
 import importlib
 import pkgutil
-from types import ModuleType
-from typing import Iterable
+import random
+from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .additive_result import AdditiveResult
+    from .break_limit_result import BreakTheLimitHitsResult
+    from .close_call_result import CloseCallResult
+    from .hits_result import HitsResult
+    from .push_limit_result import PushTheLimitHitsResult
+    from .second_chance_result import SecondChanceHitsResult
+
+_default_random = random.Random()
+
+
+class Glitch(Enum):
+    NONE = "none"
+    GLITCH = "glitch"
+    CRITICAL = "critical"
+
 
 # Add all modules in package to importable from package
 __all__ = []
@@ -22,13 +41,3 @@ for info in pkgutil.iter_modules(__path__):
         if getattr(obj, "__module__", None) == module.__name__:
             globals()[name] = obj
             __all__.append(name)
-
-def discover_modules() -> Iterable[ModuleType]:
-    """Import every non-private module in this package and yield it."""
-    pkg = __name__
-    for m in pkgutil.iter_modules(__path__):
-        if m.ispkg:
-            continue
-        if m.name.startswith("_"):
-            continue
-        yield importlib.import_module(f"{pkg}.{m.name}")

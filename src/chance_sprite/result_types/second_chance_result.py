@@ -4,9 +4,9 @@ import random
 from dataclasses import dataclass, asdict, replace
 from typing import List
 
-from chance_sprite.common.common import _default_random
-from chance_sprite.common.result_types.hits_result import HitsResult
 from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.result_types.hits_result import HitsResult
+from . import _default_random
 
 
 @dataclass(frozen=True, kw_only=True)

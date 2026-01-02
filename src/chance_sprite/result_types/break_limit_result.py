@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass, asdict, replace
+from functools import cached_property
+from itertools import zip_longest
+from typing import List, Iterable
+
+from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.result_types.hits_result import HitsResult
+from . import _default_random, Glitch
+
+
+@dataclass(frozen=True, kw_only=True)
+class BreakTheLimitHitsResult(HitsResult):
+    exploded_dice: List[List[int]]
+
+    @cached_property
+    def base_sixes(self):
+        return sum(1 for r in self.counted_rolls if r == 6)
+
+    @cached_property
+    def counted_explosions(self):
+        index = 0
+        count_this = self.base_sixes
+        counts = [count_this]
+        while count_this > 0:
+            layer = self.exploded_dice[index][:count_this]
+            count_this = sum(1 for r in layer if r == 6)
+            counts.append(count_this)
+            index += 1
+        return counts
+
+    @cached_property
+    def rerolled_hits(self):
+        rerolled_hits = 0
+        for (count, line) in zip(self.counted_explosions, self.exploded_dice):
+            rerolled_hits += sum(1 for r in line[:count] if r in (5, 6))
+        return rerolled_hits
+
+    @cached_property
+    def dice_hits(self):
+        base_hits = sum(1 for r in self.counted_rolls if r in (5, 6))
+        rerolled_hits = self.rerolled_hits
+        return base_hits + rerolled_hits
+
+    @cached_property
+    def glitch(self) -> Glitch:
+        base_ones = sum(1 for r in self.counted_rolls if r == 1)
+        rerolled_ones = sum(
+            sum(1 for r in line[:count] if r == 1)
+            for (count, line) in zip(self.counted_explosions, self.exploded_dice)
+        )
+        ones = base_ones + rerolled_ones
+        if ones * 2 + self.gremlins * 2 > self.dice:
+            return Glitch.CRITICAL if self.dice_hits == 0 else Glitch.GLITCH
+        else:
+            return Glitch.NONE
+
+    @cached_property
+    def hits_limited(self):
+        return self.dice_hits + self.rerolled_hits
+
+    def render_limited_hits(self):
+        if self.limit > 0:
+            return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'} ~~limit {self.limit}~~"
+        else:
+            return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
+
+    def render_roll(self, *, emoji_packs: EmojiPacks):
+        line = super().render_roll(emoji_packs=emoji_packs)
+        emojis = emoji_packs.d6_ex
+        for roll in self.exploded_dice:
+            line += f"\n`explode:`" + "".join(emojis[x - 1] for x in roll) + f"**{sum(1 for r in roll if r in (5, 6))}** hits"
+        line += f"\n**{self.hits_limited}** Total Hits"
+        return line
+
+    @staticmethod
+    def roll_exploding(dice: int, *, limit: int = 0, gremlins: int = 0, rng: random.Random = _default_random) -> BreakTheLimitHitsResult:
+        rolls = [rng.randint(1, 6) for _ in range(dice)]
+        exploded_dice = []
+        sixes = sum(1 for r in rolls if r==6)
+        while True:
+            rerolls = [rng.randint(1, 6) for _ in range(sixes)]
+            exploded_dice.append(rerolls)
+            sixes = sum(1 for r in rerolls if r == 6)
+            if sixes == 0:
+                break
+        return BreakTheLimitHitsResult(original_dice=dice, rolls=rolls, limit=limit, gremlins=gremlins,
+                                       exploded_dice=exploded_dice)
+
+    def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
+        new_dice_adjustment: int = self.dice_adjustment + adjustment
+        # Only roll new dice if the new adjustment exceeds the total number rolled
+        new_dice_to_roll = self.original_dice + new_dice_adjustment - len(self.rolls)
+        new_rolls = self.rolls
+        new_exploded_dice: list[list[int]] = self.exploded_dice
+        if new_dice_to_roll > 0:
+            additional_rolls = [rng.randint(1, 6) for _ in range(new_dice_to_roll)]
+            additional_explosions: list[list[int]] = []
+            additional_sixes = sum(1 for r in additional_rolls if r == 6)
+            while True:
+                rerolls = [rng.randint(1, 6) for _ in range(additional_sixes)]
+                additional_explosions.append(rerolls)
+                sixes = sum(1 for r in rerolls if r == 6)
+                if sixes == 0:
+                    break
+            pairs: Iterable[tuple[list[int], list[int]]] = zip_longest(
+                new_exploded_dice, additional_explosions, fillvalue=[]
+            )
+            new_exploded_dice = [a + b for a, b in pairs]
+            new_rolls = self.rolls + additional_rolls
+        return replace(self, rolls=new_rolls, dice_adjustment=new_dice_adjustment, exploded_dice=new_exploded_dice)
+
+    @staticmethod
+    def from_hitsresult(hits_result: HitsResult, rng: random.Random = _default_random):
+        return BreakTheLimitHitsResult(**asdict(hits_result))

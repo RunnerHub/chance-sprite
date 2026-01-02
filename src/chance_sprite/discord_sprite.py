@@ -5,11 +5,9 @@ from __future__ import annotations
 import logging
 
 import discord
-from discord import ui
 from discord.ext import commands
 
-from chance_sprite.common.commonui import BuildViewFn
-from chance_sprite.emojis.emoji_manager import EmojiManager, EmojiPacks
+from chance_sprite.emojis.emoji_manager import EmojiManager
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +26,6 @@ class DiscordSprite(commands.Bot):
             intents=intents,
         )
         self.emoji_manager = EmojiManager("chance_sprite.emojis")
-        self.emoji_packs: EmojiPacks | None = None
         self.enable_global_sync = enable_sync
 
     async def setup_hook(self) -> None:
@@ -56,17 +53,6 @@ class DiscordSprite(commands.Bot):
         #     log.info(f"Config file not found: {e}")
 
     async def on_ready(self) -> None:
-        print(f"Logged in as {self.user} (id={self.user.id})")
+        if self.user:
+            print(f"Logged in as {self.user} (id={self.user.id})")
         await self.emoji_manager.sync_application_emojis(self)
-        self.emoji_packs = self.emoji_manager.build_packs()
-
-    async def send_with_emojis(self, interaction: discord.Interaction, view_builder: BuildViewFn):
-        emoji_packs = self.emoji_packs
-        if self.emoji_packs:
-            view = view_builder(emoji_packs)
-            await interaction.response.send_message(view=view)
-        else:
-            view = ui.LayoutView()
-            await interaction.response.send_message("Still loading emojis, please wait!")
-        msg = await interaction.original_response()
-        return view, msg

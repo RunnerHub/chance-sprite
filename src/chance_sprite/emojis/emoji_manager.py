@@ -1,11 +1,15 @@
 # emoji_manager.py
 from __future__ import annotations
 
+import imghdr
 import logging
 from dataclasses import dataclass
 from importlib import resources
 
 import discord
+from discord import ui
+
+from chance_sprite.ui.commonui import BuildViewFn
 
 log = logging.getLogger(__name__)
 
@@ -29,11 +33,13 @@ class EmojiManager:
         self.packs: EmojiPacks | None = None
 
     def iter_emoji_assets(self):
-        exts = {".png", ".gif", ".jpg", ".jpeg", ".webp"}
         base = resources.files(self.resource)
-        for potential in sorted(base.iterdir(), key=lambda x: x.name):
-            if potential.is_file() and potential.suffix.lower() in exts:
-                yield potential.stem, potential.read_bytes()
+        for p in base.iterdir():
+            if not p.is_file():
+                continue
+            data = p.read_bytes()
+            if imghdr.what(None, data):
+                yield p.name.rsplit(".", 1)[0], data
 
     async def sync_application_emojis(self, client: discord.Client) -> None:
         # 1) Fetch existing app emojis
@@ -92,3 +98,13 @@ class EmojiManager:
         )
         self.packs = packs
         return packs
+
+    async def send_with_emojis(self, interaction: discord.Interaction, view_builder: BuildViewFn):
+        if self.packs:
+            view = view_builder(self.packs)
+            await interaction.response.send_message(view=view)
+        else:
+            view = ui.LayoutView()
+            await interaction.response.send_message("Still loading emojis, please wait!")
+        msg = await interaction.original_response()
+        return view, msg

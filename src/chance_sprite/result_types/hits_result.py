@@ -2,28 +2,43 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, replace
+from functools import cached_property
 from typing import List
 
-from chance_sprite.common.common import Glitch, _default_random
 from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.result_types import Glitch
+from . import _default_random
 
 
 @dataclass(frozen=True, kw_only=True)
 class HitsResult:
-    dice: int
+    original_dice: int
     rolls: List[int]
-    ones: int
-    dice_hits: int
-    glitch: Glitch
     limit: int
     gremlins: int
     dice_adjustment: int = 0
 
-    @property
-    def original_dice(self):
-        return self.dice - self.dice_adjustment
+    @cached_property
+    def dice(self):
+        return self.original_dice + self.dice_adjustment
 
-    @property
+    @cached_property
+    def counted_rolls(self):
+        return self.rolls[:self.dice]
+
+    @cached_property
+    def dice_hits(self):
+        return sum(1 for r in self.counted_rolls if r in (5, 6))
+
+    @cached_property
+    def glitch(self) -> Glitch:
+        ones = sum(1 for r in self.counted_rolls if r == 1)
+        if ones * 2 + self.gremlins * 2 > self.dice:
+            return Glitch.CRITICAL if self.dice_hits == 0 else Glitch.GLITCH
+        else:
+            return Glitch.NONE
+
+    @cached_property
     def hits_limited(self):
         if self.limit > 0:
             return min(self.limit, self.dice_hits)
@@ -34,26 +49,21 @@ class HitsResult:
     @staticmethod
     def roll(dice: int, *, limit: int = 0, gremlins: int = 0, rng: random.Random = _default_random) -> HitsResult:
         rolls = [rng.randint(1, 6) for _ in range(dice)]
-        ones = sum(1 for r in rolls if r == 1)
-        dice_hits = sum(1 for r in rolls if r in (5, 6))
-        glitch = Glitch.NONE
-        if ones + gremlins > dice / 2.0:
-            glitch = Glitch.CRITICAL if dice_hits == 0 else Glitch.GLITCH
-        return HitsResult(dice=dice, rolls=rolls, ones=ones, dice_hits=dice_hits, glitch=glitch, limit=limit, gremlins=gremlins)
+        return HitsResult(original_dice=dice, rolls=rolls, limit=limit, gremlins=gremlins)
 
 
     def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
         new_dice_adjustment: int = self.dice_adjustment + adjustment
-        new_dice_to_roll = self.dice + adjustment - len(self.rolls)
-        new_rolls = self.rolls + [rng.randint(1, 6) for _ in range(new_dice_to_roll)] if new_dice_to_roll > 0 else self.rolls
-        new_dice_count = self.dice + new_dice_adjustment
-        counted_dice = new_rolls[0:new_dice_count-1]
-        new_dice_hits: int = sum(1 for r in counted_dice if r in (5, 6))
-        new_ones = sum(1 for r in counted_dice if r == 1)
-        new_glitch: Glitch = Glitch.NONE
-        if new_ones * 2 + self.gremlins > new_dice_count:
-            new_glitch = Glitch.CRITICAL if new_dice_hits == 0 else Glitch.GLITCH
-        return replace(self, rolls=new_rolls, dice=new_dice_count, ones=new_ones, dice_hits=new_dice_hits, glitch=new_glitch, dice_adjustment=new_dice_adjustment)
+        # Only roll new dice if the new adjustment exceeds the total number rolled
+        new_dice_to_roll = self.original_dice + new_dice_adjustment - len(self.rolls)
+        new_rolls = self.rolls
+        if new_dice_to_roll > 0:
+            additional_rolls = [rng.randint(1, 6) for _ in range(new_dice_to_roll)]
+            new_rolls = self.rolls + additional_rolls
+        return replace(self, rolls=new_rolls, dice_adjustment=new_dice_adjustment)
+
+    def adjust_limit(self, limit):
+        return replace(self, limit=limit)
 
     # === RENDERING ===
     def render_limited_hits(self):

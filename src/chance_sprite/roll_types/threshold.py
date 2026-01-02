@@ -5,12 +5,13 @@ from dataclasses import dataclass
 from typing import Optional
 
 import discord
-from discord import ui
 from discord import app_commands
-from chance_sprite.common.common import Glitch
-from chance_sprite.common.result_types.hits_result import HitsResult
-from ..common.commonui import build_header, BuildViewFn
-from ..emojis.emoji_manager import EmojiPacks
+from discord import ui
+
+from chance_sprite.result_types import Glitch
+from chance_sprite.result_types import HitsResult
+from ..emojis.emoji_manager import EmojiPacks, EmojiManager
+from ..ui.commonui import build_header, BuildViewFn
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,7 @@ class ThresholdResult:
         return _build
 
 
-def register(group: app_commands.Group) -> None:
+def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
     @group.command(name="threshold", description="Roll some d6s, Shadowrun-style.")
     @app_commands.describe(
         label="A label to describe the roll.",
@@ -90,4 +91,4 @@ def register(group: app_commands.Group) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ThresholdResult.roll(dice=int(dice), threshold=threshold or 0, limit=limit or 0, gremlins=gremlins or 0)
-        await interaction.client.send_with_emojis(interaction, result.build_view(label))
+        await emoji_manager.send_with_emojis(interaction, result.build_view(label))
