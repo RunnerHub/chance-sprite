@@ -55,7 +55,7 @@ class SimpleRollResult:
     @staticmethod
     def roll(dice: int, *, limit: int = 0, gremlins: int = 0, explode: bool) -> SimpleRollResult:
         if(explode):
-            return SimpleRollResult(HitsResult.roll_exploding(dice=dice,  limit=limit, gremlins=gremlins))
+            return SimpleRollResult(BreakTheLimitHitsResult.roll_exploding(dice=dice,  limit=limit, gremlins=gremlins))
         else:
             return SimpleRollResult(HitsResult.roll(dice=dice,  limit=limit, gremlins=gremlins))
 

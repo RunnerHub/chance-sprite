@@ -40,21 +40,21 @@ class DiscordSprite(commands.Bot):
         # Global sync (slow propagation).
         if self.enable_global_sync:
             await self.tree.sync()
-
-        try:
-            self.config = ConfigFile("config.json")
-            log.info("Trying fast sync")
-            for guild_id in self.config["fastpush_guilds"]:
-                try:
-                    log.info(f"Fast syncing {guild_id}...")
-                    guild = discord.Object(id=guild_id)
-                    self.tree.copy_global_to(guild=guild)
-                    await self.tree.sync(guild=guild)
-                    log.info(f"done.")
-                except Exception as e:
-                    log.info(f"errored: {e}")
-        except Exception as e:
-            log.info(f"Config file not found: {e}")
+        #
+        # try:
+        #     self.config = ConfigFile("config.json")
+        #     log.info("Trying fast sync")
+        #     for guild_id in self.config["fastpush_guilds"]:
+        #         try:
+        #             log.info(f"Fast syncing {guild_id}...")
+        #             guild = discord.Object(id=guild_id)
+        #             self.tree.copy_global_to(guild=guild)
+        #             await self.tree.sync(guild=guild)
+        #             log.info(f"done.")
+        #         except Exception as e:
+        #             log.info(f"errored: {e}")
+        # except Exception as e:
+        #     log.info(f"Config file not found: {e}")
 
     async def on_ready(self) -> None:
         print(f"Logged in as {self.user} (id={self.user.id})")
