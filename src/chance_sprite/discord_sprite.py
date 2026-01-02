@@ -10,6 +10,7 @@ from discord.ext import commands
 
 from chance_sprite.emojis.emoji_manager import EmojiManager, EmojiPacks
 from chance_sprite.common.commonui import BuildViewFn
+from chance_sprite.file_sprite import ConfigFile
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ EXTENSIONS: tuple[str, ...] = (
 
 class DiscordSprite(commands.Bot):
     def __init__(self, *, enable_sync: bool = True) -> None:
+        self.config = None
         intents = discord.Intents.default()
         intents.guilds = True
         intents.guild_messages = True
@@ -39,11 +41,20 @@ class DiscordSprite(commands.Bot):
         if self.enable_global_sync:
             await self.tree.sync()
 
-        # TODO: instant sync per guild
-        # Instant sync to one guild
-        # guild = discord.Object(id=TEST_GUILD_ID)
-        # self.tree.copy_global_to(guild=guild)
-        # await self.tree.sync(guild=guild)
+        try:
+            self.config = ConfigFile("config.json")
+            log.info("Trying fast sync")
+            for guild_id in self.config["fastpush_guilds"]:
+                try:
+                    log.info(f"Fast syncing {guild_id}...")
+                    guild = discord.Object(id=guild_id)
+                    self.tree.copy_global_to(guild=guild)
+                    await self.tree.sync(guild=guild)
+                    log.info(f"done.")
+                except Exception as e:
+                    log.info(f"errored: {e}")
+        except Exception as e:
+            log.info(f"Config file not found: {e}")
 
     async def on_ready(self) -> None:
         print(f"Logged in as {self.user} (id={self.user.id})")
