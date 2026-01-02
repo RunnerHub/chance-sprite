@@ -8,7 +8,8 @@ import discord
 from discord import app_commands
 from discord import ui
 
-from .common import HitsResult, BuildViewFn, build_header
+from chance_sprite.common.result_types.hits_result import HitsResult
+from ..common.commonui import build_header, BuildViewFn
 from ..emojis.emoji_manager import EmojiPacks
 
 
@@ -100,4 +101,4 @@ def register(group: app_commands.Group) -> None:
             initiator_gremlins=initiator_gremlins or 0,
             defender_gremlins=defender_gremlins or 0
         )
-        interaction.client.send_with_emojis(interaction, result.build_view(label))
+        await interaction.client.send_with_emojis(interaction, result.build_view(label))

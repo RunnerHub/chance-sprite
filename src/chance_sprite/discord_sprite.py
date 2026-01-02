@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 
 import discord
+from discord import InteractionMessage
 from discord.ext import commands
 
 from chance_sprite.emojis.emoji_manager import EmojiManager, EmojiPacks
+from chance_sprite.common.commonui import BuildViewFn
 
 log = logging.getLogger(__name__)
 
@@ -51,8 +53,9 @@ class DiscordSprite(commands.Bot):
     async def send_with_emojis(self, interaction: discord.Interaction, view_builder: BuildViewFn):
         emoji_packs = self.emoji_packs
         if self.emoji_packs:
-            await interaction.response.send_message(view=view_builder(emoji_packs))
+            view = view_builder(emoji_packs)
+            await interaction.response.send_message(view=view)
         else:
             await interaction.response.send_message("Still loading emojis, please wait!")
-        # Todo: Add buttons
-        _msg = await interaction.original_response()
+        msg = await interaction.original_response()
+        return view, msg

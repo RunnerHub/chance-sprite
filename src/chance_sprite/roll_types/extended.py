@@ -8,7 +8,8 @@ import discord
 from discord import app_commands
 from discord import ui
 
-from .common import HitsResult, build_header
+from chance_sprite.common.result_types.hits_result import HitsResult
+from ..common.commonui import build_header
 from ..emojis.emoji_manager import EmojiPacks
 
 
@@ -129,4 +130,4 @@ def register(group: app_commands.Group) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ExtendedResult.roll(int(dice), int(threshold), int(max_iters), limit=limit or 0, gremlins=gremlins or 0)
-        interaction.client.send_with_emojis(interaction, result.build_view(label))
+        await interaction.client.send_with_emojis(interaction, result.build_view(label))
