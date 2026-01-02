@@ -128,7 +128,7 @@ D6_EMOJIS = [
     "<:d6r5:1447759074119778396>",
     "<:d6r6:1447759073096368149>",
 ]
-emoji_packs = EmojiPacks(D6_EMOJIS, D6_EMOJIS)
+emoji_packs = EmojiPacks(D6_EMOJIS, D6_EMOJIS, D6_EMOJIS, "glitch", "critical glitch")
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(

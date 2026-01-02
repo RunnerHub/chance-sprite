@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 import discord
 from discord import app_commands
 from discord import ui
-from discord.app_commands import Choice
 
-from .common import HitsResult, Glitch, AdditiveResult, BuildViewFn, build_header
+from chance_sprite.common.result_types.additive_result import AdditiveResult
+from chance_sprite.common.result_types.hits_result import HitsResult
+from ..common.commonui import build_header, BuildViewFn
 from ..emojis.emoji_manager import EmojiPacks
 
 
@@ -19,7 +19,7 @@ class StartingCashSpec:
     label: str        # display name
     dice: int         # number of d6
     mult: int         # nuyen multiplier
-    color: str  # hex
+    color: int  # hex
 
 class LifestyleStartingCash(Enum):
     STREET   = StartingCashSpec("Street",   1, 20,  0xFFB3BA)  # pastel red
@@ -91,4 +91,4 @@ def register(group: app_commands.Group) -> None:
         lifestyle: app_commands.Choice[str]
     ) -> None:
         result = StartingCashResult.roll(lifestyle=LifestyleStartingCash[lifestyle.value])
-        interaction.client.send_with_emojis(interaction, result.build_view(label))
+        await interaction.client.send_with_emojis(interaction, result.build_view(label))

@@ -8,7 +8,9 @@ import discord
 from discord import ui
 from discord import app_commands
 
-from .common import HitsResult, Glitch, build_header, BuildViewFn
+from chance_sprite.common.common import Glitch
+from chance_sprite.common.result_types.hits_result import HitsResult
+from ..common.commonui import build_header, BuildViewFn
 from ..emojis.emoji_manager import EmojiPacks
 
 
@@ -141,4 +143,4 @@ def register(group: app_commands.Group) -> None:
             drain_dice=int(drain_dice),
             limit=int(limit) if limit is not None else None,
         )
-        interaction.client.send_with_emojis(interaction, result.build_view(label))
+        await interaction.client.send_with_emojis(interaction, result.build_view(label))
