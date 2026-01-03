@@ -41,16 +41,21 @@ class SecondChanceHitsResult(HitsResult):
 
     def render_rerolls(self, *, emoji_packs: EmojiPacks) -> str:
         emojis = emoji_packs.d6
-        if self.dice_adjustment < 0:
-            n_dice = self.dice-self.rerolled_hits
-            line = "".join(emojis[x - 1] for x in self.rerolled_dice[0:n_dice])
-            line += "**-**~~" + "".join(str(x) for x in self.rerolled_dice[n_dice:]) + "~~"
-        elif self.dice_adjustment > 0:
-            original_rerolls = sum(1 for r in range(self.original_dice) if r<5)
-            line = "".join(emojis[x - 1] for x in self.rerolled_dice[0:original_rerolls])
-            line += "**+**" + "".join(emojis[x - 1] for x in self.rerolled_dice[original_rerolls:])
+        n_original_hits = sum(1 for r in self.rolls[:self.original_dice] if r in (5, 6))
+        n_original_rerolls = self.original_dice - n_original_hits
+        n_current_rerolls = self.dice - self.dice_hits
+        post_dice_adjustment = n_current_rerolls - n_original_rerolls
+        if post_dice_adjustment < 0:
+            line = "".join(emojis[x - 1] for x in self.rerolled_dice[:n_current_rerolls])
+            line += "-~~" + "".join(str(x) for x in self.rerolled_dice[n_current_rerolls:n_original_rerolls]) + "~~"
         else:
-            line = "".join(emojis[x - 1] for x in self.rerolled_dice)
+            line = "".join(emojis[x - 1] for x in self.rerolled_dice[:n_original_rerolls])
+
+        if len(self.rerolled_dice) > n_original_rerolls:
+            if post_dice_adjustment > 0:
+                line += "+" + "".join(emojis[x - 1] for x in self.rerolled_dice[n_original_rerolls:n_current_rerolls])
+            if len(self.rerolled_dice) > n_current_rerolls:
+                line += "-~~" + "".join(str(x) for x in self.rerolled_dice[n_current_rerolls:]) + "~~"
         return line
 
     @staticmethod
@@ -61,8 +66,9 @@ class SecondChanceHitsResult(HitsResult):
 
     def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
         replacement_base = super().adjust_dice(adjustment, rng)
-        new_rerolled_dice_amount = replacement_base.dice - replacement_base.dice_hits - len(self.rerolled_dice)
-        added_rerolls = [rng.randint(1, 6) for _ in range(new_rerolled_dice_amount)]
+        added_dice_amount = replacement_base.dice - replacement_base.dice_hits - len(self.rerolled_dice)
+        added_rerolls = [rng.randint(1, 6) for _ in range(added_dice_amount)]
         new_rerolled_dice = self.rerolled_dice + added_rerolls
-        new_rerolled_hits = sum(1 for r in new_rerolled_dice[0:new_rerolled_dice_amount-1] if r in (5, 6))
+        new_rerolled_hits = sum(
+            1 for r in new_rerolled_dice[0:replacement_base.dice - replacement_base.dice_hits] if r in (5, 6))
         return replace(replacement_base, rerolled_dice=new_rerolled_dice, rerolled_hits=new_rerolled_hits)
