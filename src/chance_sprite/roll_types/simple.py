@@ -1,7 +1,8 @@
+# simple.py
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional, Callable
 
 import discord
@@ -9,9 +10,11 @@ from discord import ui, app_commands
 
 from chance_sprite.result_types import BreakTheLimitHitsResult
 from chance_sprite.result_types import HitsResult
-from chance_sprite.ui.menus.generic_edge_menu import GenericEdgeMenu
-from ..emojis.emoji_manager import EmojiPacks, EmojiManager
-from ..ui.commonui import build_header, GenericResultAccessor
+from chance_sprite.ui.generic_edge_menu import GenericEdgeMenu
+from ..discord_sprite import SpriteContext
+from ..emojis.emoji_manager import EmojiPacks
+from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..ui.commonui import build_header, RollAccessor
 
 log = logging.getLogger(__name__)
 
@@ -32,32 +35,17 @@ class SimpleResultView(ui.LayoutView):
         self.add_item(container)
 
 
-class SimpleResultAccessor(GenericResultAccessor):
-    def __init__(self, view: SimpleResultView, original_message):
-        self.view = view
-        self.original_message = original_message
-
-    def get(self):
-        return self.view.result
-
-    async def update(self, result: HitsResult):
-        self.view.result = result
-        self.view.clear_items()
-        self.view._build()
-        # Edit the original message that contains this view
-        await self.original_message.edit(view=self.view)
-
-
-@dataclass(frozen=True)
-class SimpleRollResult:
+@dataclass(kw_only=True, frozen=True)
+class SimpleRollResult(RollRecordBase):
     result: HitsResult
 
     @staticmethod
     def roll(dice: int, *, limit: int = 0, gremlins: int = 0, explode: bool) -> SimpleRollResult:
         if explode:
-            return SimpleRollResult(BreakTheLimitHitsResult.roll_exploding(dice=dice,  limit=limit, gremlins=gremlins))
+            return SimpleRollResult(
+                result=BreakTheLimitHitsResult.roll_exploding(dice=dice, limit=limit, gremlins=gremlins))
         else:
-            return SimpleRollResult(HitsResult.roll(dice=dice,  limit=limit, gremlins=gremlins))
+            return SimpleRollResult(result=HitsResult.roll(dice=dice, limit=limit, gremlins=gremlins))
 
     def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
         def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
@@ -65,7 +53,7 @@ class SimpleRollResult:
         return _build
 
 
-def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
+def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="simple", description="Roll some d6s, Shadowrun-style.")
     @app_commands.describe(
         label="A label to describe the roll.",
@@ -83,7 +71,15 @@ def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
         explode: bool = False
     ) -> None:
         result = SimpleRollResult.roll(dice=int(dice), limit=limit or 0, gremlins=gremlins or 0, explode=explode)
-        primary_view, original_message = await emoji_manager.send_with_emojis(interaction, result.build_view(label))
-        edge_menu = GenericEdgeMenu(f"Edge for {label}:", SimpleResultAccessor(primary_view, original_message), lambda i: i == interaction.user.id)
-        followup_message = await interaction.followup.send(view=edge_menu, ephemeral=True)
-        edge_menu.followup_message = followup_message
+        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
+        await interaction.response.send_message(view=primary_view)
+        record = await MessageRecord.from_interaction(
+            interaction=interaction,
+            label=label,
+            result=result
+        )
+        context.message_cache.put(record)
+
+        roll_accessor = RollAccessor[SimpleRollResult](getter=lambda r: r.result,
+                                                       setter=lambda r, v: replace(r, result=v))
+        await GenericEdgeMenu(f"Edge for {label}:", roll_accessor, record, context).send_as_followup(interaction)

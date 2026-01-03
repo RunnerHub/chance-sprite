@@ -1,7 +1,7 @@
 # threshold.py
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional, Callable
 
 import discord
@@ -10,12 +10,15 @@ from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
-from ..emojis.emoji_manager import EmojiPacks, EmojiManager
-from ..ui.commonui import build_header
+from ..discord_sprite import SpriteContext
+from ..emojis.emoji_manager import EmojiPacks
+from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..ui.commonui import build_header, RollAccessor
+from ..ui.generic_edge_menu import GenericEdgeMenu
 
 
 @dataclass(frozen=True)
-class ThresholdResult:
+class ThresholdResult(RollRecordBase):
     result: HitsResult
     threshold: int
 
@@ -73,7 +76,7 @@ class ThresholdResult:
         return _build
 
 
-def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
+def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="threshold", description="Roll some d6s, Shadowrun-style.")
     @app_commands.describe(
         label="A label to describe the roll.",
@@ -91,4 +94,15 @@ def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ThresholdResult.roll(dice=int(dice), threshold=threshold or 0, limit=limit or 0, gremlins=gremlins or 0)
-        await emoji_manager.send_with_emojis(interaction, result.build_view(label))
+        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
+        await interaction.response.send_message(view=primary_view)
+        record = await MessageRecord.from_interaction(
+            interaction=interaction,
+            label=label,
+            result=result
+        )
+        context.message_cache.put(record)
+
+        result_accessor = RollAccessor[ThresholdResult](getter=lambda r: r.result,
+                                                        setter=lambda r, v: replace(r, result=v))
+        await GenericEdgeMenu(f"Edge for {label}:", result_accessor, record, context).send_as_followup(interaction)

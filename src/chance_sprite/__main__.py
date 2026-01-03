@@ -7,8 +7,9 @@ import sys
 from .discord_sprite import DiscordSprite
 from .file_sprite import ConfigFile
 
+
 def main() -> None:
-    token = ConfigFile("discord_secret.json").get("discord_token")
+    token = ConfigFile[str, str]("discord_secret.json").get("discord_token")
     if not token:
         print("Missing DISCORD_TOKEN env var.", file=sys.stderr)
         raise SystemExit(2)

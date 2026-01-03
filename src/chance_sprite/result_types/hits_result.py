@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, replace
-from functools import cached_property
 from typing import List
 
 from chance_sprite.emojis.emoji_manager import EmojiPacks
@@ -18,19 +17,19 @@ class HitsResult:
     gremlins: int
     dice_adjustment: int = 0
 
-    @cached_property
+    @property
     def dice(self):
         return self.original_dice + self.dice_adjustment
 
-    @cached_property
+    @property
     def counted_rolls(self):
         return self.rolls[:self.dice]
 
-    @cached_property
+    @property
     def dice_hits(self):
         return sum(1 for r in self.counted_rolls if r in (5, 6))
 
-    @cached_property
+    @property
     def glitch(self) -> Glitch:
         ones = sum(1 for r in self.counted_rolls if r == 1)
         if ones * 2 + self.gremlins * 2 > self.dice:
@@ -38,7 +37,7 @@ class HitsResult:
         else:
             return Glitch.NONE
 
-    @cached_property
+    @property
     def hits_limited(self):
         if self.limit > 0:
             return min(self.limit, self.dice_hits)
@@ -53,7 +52,7 @@ class HitsResult:
 
 
     def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
-        new_dice_adjustment: int = self.dice_adjustment + adjustment
+        new_dice_adjustment: int = max(self.dice_adjustment + adjustment, -self.original_dice)
         # Only roll new dice if the new adjustment exceeds the total number rolled
         new_dice_to_roll = self.original_dice + new_dice_adjustment - len(self.rolls)
         new_rolls = self.rolls
@@ -84,13 +83,16 @@ class HitsResult:
         emojis =  emoji_packs.d6
 
         if self.dice_adjustment < 0:
-            line = "".join(emojis[x - 1] for x in self.rolls[0:self.dice])
-            line += "-~~" + "".join(str(x) for x in self.rolls[self.dice:]) + "~~"
-        elif self.dice_adjustment > 0:
-            line = "".join(emojis[x - 1] for x in self.rolls[0:self.original_dice])
-            line += "+" + "".join(emojis[x - 1] for x in self.rolls[self.original_dice:])
+            line = "".join(emojis[x - 1] for x in self.rolls[:self.dice])
+            line += "-~~" + "".join(str(x) for x in self.rolls[self.dice:self.original_dice]) + "~~"
         else:
-            line = "".join(emojis[x - 1] for x in self.rolls)
+            line = "".join(emojis[x - 1] for x in self.rolls[:self.original_dice])
+
+        if len(self.rolls) > self.original_dice:
+            if self.dice_adjustment > 0:
+                line += "+" + "".join(emojis[x - 1] for x in self.rolls[self.original_dice:self.dice])
+            if len(self.rolls) > self.dice:
+                line += "-~~" + "".join(str(x) for x in self.rolls[self.dice:]) + "~~"
         return line
 
     def render_glitch(self, *, emoji_packs: EmojiPacks):

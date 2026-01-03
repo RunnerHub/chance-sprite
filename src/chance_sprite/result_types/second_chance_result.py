@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, asdict, replace
+from dataclasses import dataclass, replace
 from typing import List
+
+from msgspec import to_builtins
 
 from chance_sprite.emojis.emoji_manager import EmojiPacks
 from chance_sprite.result_types.hits_result import HitsResult
@@ -55,7 +57,7 @@ class SecondChanceHitsResult(HitsResult):
     def from_hitsresult(hits_result: HitsResult, rng: random.Random = _default_random):
         rerolls = [rng.randint(1, 6) for _ in range(hits_result.dice - hits_result.dice_hits)]
         new_hits = sum(1 for r in rerolls if r in (5, 6))
-        return SecondChanceHitsResult(**asdict(hits_result), rerolled_dice=rerolls, rerolled_hits=new_hits)
+        return SecondChanceHitsResult(**to_builtins(hits_result), rerolled_dice=rerolls, rerolled_hits=new_hits)
 
     def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
         replacement_base = super().adjust_dice(adjustment, rng)

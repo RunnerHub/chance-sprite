@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import random
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
+
+from msgspec import to_builtins
 
 from chance_sprite.emojis.emoji_manager import EmojiPacks
 from chance_sprite.result_types.hits_result import HitsResult
-from . import _default_random, Glitch
+from . import Glitch
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CloseCallResult(HitsResult):
     def render_glitch(self, *, emoji_packs: EmojiPacks):
         if self.glitch == Glitch.GLITCH:
@@ -18,5 +19,5 @@ class CloseCallResult(HitsResult):
         return ""
 
     @staticmethod
-    def from_hitsresult(hits_result: HitsResult, rng: random.Random = _default_random):
-        return CloseCallResult(**asdict(hits_result))
+    def from_hitsresult(hits_result: HitsResult):
+        return CloseCallResult(**to_builtins(hits_result))

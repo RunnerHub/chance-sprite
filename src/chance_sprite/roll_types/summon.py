@@ -1,7 +1,7 @@
 # summon.py
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional, Callable
 
 import discord
@@ -10,12 +10,15 @@ from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
-from ..emojis.emoji_manager import EmojiPacks, EmojiManager
-from ..ui.commonui import build_header
+from ..discord_sprite import SpriteContext
+from ..emojis.emoji_manager import EmojiPacks
+from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..ui.commonui import build_header, RollAccessor
+from ..ui.generic_edge_menu import GenericEdgeMenu
 
 
 @dataclass(frozen=True)
-class SummonResult:
+class SummonResult(RollRecordBase):
     # Inputs
     force: int
     drain_adjust: int  # additive override applied to DV after spirit hits
@@ -127,7 +130,7 @@ class SummonResult:
         return _build
 
 
-def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
+def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="summon", description="Summoning test vs spirit resistance + drain (SR5).")
     @app_commands.describe(
         label="A label to describe the roll (spirit type + task are a good start).",
@@ -152,4 +155,15 @@ def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
             limit=limit or 0,
             drain_adjust=int(drain_adjust),
         )
-        await emoji_manager.send_with_emojis(interaction, result.build_view(label))
+        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
+        await interaction.response.send_message(view=primary_view)
+        record = await MessageRecord.from_interaction(interaction=interaction, label=label, result=result)
+        context.message_cache.put(record)
+
+        summon_accessor = RollAccessor[SummonResult](getter=lambda r: r.summon,
+                                                     setter=lambda r, v: replace(r, summon=v))
+        await GenericEdgeMenu(f"Edge Summoning for {label}?", summon_accessor, record, context).send_as_followup(
+            interaction)
+
+        drain_accessor = RollAccessor[SummonResult](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
+        await GenericEdgeMenu(f"Edge Drain for {label}?", drain_accessor, record, context).send_as_followup(interaction)

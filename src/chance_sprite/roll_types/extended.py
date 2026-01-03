@@ -9,7 +9,9 @@ from discord import app_commands
 from discord import ui
 
 from chance_sprite.result_types import HitsResult
-from ..emojis.emoji_manager import EmojiPacks, EmojiManager
+from ..discord_sprite import SpriteContext
+from ..emojis.emoji_manager import EmojiPacks
+from ..message_cache.roll_record import MessageRecord, RollRecordBase
 from ..ui.commonui import build_header
 
 
@@ -21,7 +23,7 @@ class ExtendedIteration:
 
 
 @dataclass(frozen=True)
-class ExtendedResult:
+class ExtendedResult(RollRecordBase):
     start_dice: int
     threshold: int
     max_iters: int
@@ -111,7 +113,7 @@ class ExtendedResult:
         return _build
 
 
-def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
+def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="extended", description="Extended roll: repeated tests with shrinking dice pool.")
     @app_commands.describe(
         label="A label to describe the roll.",
@@ -131,4 +133,11 @@ def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ExtendedResult.roll(int(dice), int(threshold), int(max_iters), limit=limit or 0, gremlins=gremlins or 0)
-        await emoji_manager.send_with_emojis(interaction, result.build_view(label))
+        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
+        await interaction.response.send_message(view=primary_view)
+        record = await MessageRecord.from_interaction(
+            interaction=interaction,
+            label=label,
+            result=result
+        )
+        context.message_cache.put(record)

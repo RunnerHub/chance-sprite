@@ -100,13 +100,11 @@ class EmojiManager:
         self.packs = packs
         return packs
 
-    async def send_with_emojis(self, interaction: discord.Interaction,
-                               view_builder: Callable[[EmojiPacks], ui.LayoutView]):
+    async def apply_emojis(self, interaction: discord.Interaction,
+                           view_builder: Callable[[EmojiPacks], ui.LayoutView]):
         if self.packs:
             view = view_builder(self.packs)
-            await interaction.response.send_message(view=view)
         else:
             view = ui.LayoutView()
-            await interaction.response.send_message("Still loading emojis, please wait!")
-        msg = await interaction.original_response()
-        return view, msg
+            view.add_item(ui.TextDisplay("Still loading emojis, please wait!"))
+        return view

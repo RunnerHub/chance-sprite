@@ -11,7 +11,6 @@ log = logging.getLogger(__name__)
 
 
 async def setup(bot: DiscordSprite) -> None:
-    emoji_manager = bot.emoji_manager
     group = app_commands.Group(name="rolld6", description="SR5 d6 dice rolling tools.")
     app_commands.allowed_installs(guilds=True, users=True)(group)
     app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)(group)
@@ -23,7 +22,7 @@ async def setup(bot: DiscordSprite) -> None:
         register = getattr(module, "register", None)
         if register is None:
             continue
-        register(group, emoji_manager)
+        register(group, bot.context)
         registered += 1
 
     bot.tree.add_command(group)

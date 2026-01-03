@@ -1,7 +1,7 @@
 # bind.py
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional, Callable
 
 import discord
@@ -10,12 +10,15 @@ from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
-from ..emojis.emoji_manager import EmojiPacks, EmojiManager
-from ..ui.commonui import build_header
+from ..discord_sprite import SpriteContext
+from ..emojis.emoji_manager import EmojiPacks
+from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..ui.commonui import build_header, RollAccessor
+from ..ui.generic_edge_menu import GenericEdgeMenu
 
 
 @dataclass(frozen=True)
-class BindResult:
+class BindResult(RollRecordBase):
     # Inputs
     force: int
     services_in: int
@@ -138,7 +141,7 @@ class BindResult:
         return _build
 
 
-def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
+def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="bind", description="Binding test vs spirit resistance (2×Force) + drain (SR5).")
     @app_commands.describe(
         label="A label to describe the roll (spirit type + prep are a good start).",
@@ -167,4 +170,18 @@ def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
             limit=int(limit) if limit is not None else None,
             drain_adjust=int(drain_adjust),
         )
-        await emoji_manager.send_with_emojis(interaction, result.build_view(label))
+        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
+        await interaction.response.send_message(view=primary_view)
+        record = await MessageRecord.from_interaction(
+            interaction=interaction,
+            label=label,
+            result=result
+        )
+        context.message_cache.put(record)
+
+        bind_accessor = RollAccessor[BindResult](getter=lambda r: r.bind, setter=lambda r, v: replace(r, bind=v))
+        await GenericEdgeMenu(f"Edge Binding for {label}?", bind_accessor, record, context).send_as_followup(
+            interaction)
+
+        drain_accessor = RollAccessor[BindResult](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
+        await GenericEdgeMenu(f"Edge Drain for {label}?", drain_accessor, record, context).send_as_followup(interaction)

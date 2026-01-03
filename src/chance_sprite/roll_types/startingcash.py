@@ -10,7 +10,9 @@ from discord import app_commands
 from discord import ui
 
 from chance_sprite.result_types import AdditiveResult
-from ..emojis.emoji_manager import EmojiPacks, EmojiManager
+from ..discord_sprite import SpriteContext
+from ..emojis.emoji_manager import EmojiPacks
+from ..message_cache.roll_record import MessageRecord, RollRecordBase
 from ..ui.commonui import build_header
 
 
@@ -46,7 +48,7 @@ class LifestyleStartingCash(Enum):
         return self.value.color
 
 @dataclass(frozen=True)
-class StartingCashResult:
+class StartingCashResult(RollRecordBase):
     result: AdditiveResult
     lifestyle: LifestyleStartingCash
 
@@ -73,7 +75,7 @@ class StartingCashResult:
         return _build
 
 
-def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
+def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="startingcash", description="Roll for starting cash.")
     @app_commands.describe(
         label="Who is it for?",
@@ -91,4 +93,11 @@ def register(group: app_commands.Group, emoji_manager: EmojiManager) -> None:
         lifestyle: app_commands.Choice[str]
     ) -> None:
         result = StartingCashResult.roll(lifestyle=LifestyleStartingCash[lifestyle.value])
-        await emoji_manager.send_with_emojis(interaction, result.build_view(label))
+        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
+        await interaction.response.send_message(view=primary_view)
+        record = await MessageRecord.from_interaction(
+            interaction=interaction,
+            label=label,
+            result=result
+        )
+        context.message_cache.put(record)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, asdict, replace
+from dataclasses import dataclass, replace
 from functools import cached_property
 from itertools import zip_longest
 from typing import List, Iterable
@@ -111,7 +111,3 @@ class BreakTheLimitHitsResult(HitsResult):
             new_exploded_dice = [a + b for a, b in pairs]
             new_rolls = self.rolls + additional_rolls
         return replace(self, rolls=new_rolls, dice_adjustment=new_dice_adjustment, exploded_dice=new_exploded_dice)
-
-    @staticmethod
-    def from_hitsresult(hits_result: HitsResult, rng: random.Random = _default_random):
-        return BreakTheLimitHitsResult(**asdict(hits_result))

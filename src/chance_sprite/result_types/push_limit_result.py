@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import List
 
+from msgspec import to_builtins
+
 from chance_sprite.emojis.emoji_manager import EmojiPacks
-from chance_sprite.result_types.additive_result import AdditiveResult
 from chance_sprite.result_types.hits_result import HitsResult
 from . import _default_random
 
@@ -47,8 +48,5 @@ class PushTheLimitHitsResult(HitsResult):
             if sixes == 0:
                 break
 
-        return PushTheLimitHitsResult(**asdict(hits_result), exploded_dice=explosion_iterations, rerolled_hits=total_hits)
-
-
-def from_hitsresult(hits_result: HitsResult, rng: random.Random = _default_random):
-    return AdditiveResult(**asdict(hits_result))
+        return PushTheLimitHitsResult(**to_builtins(hits_result), exploded_dice=explosion_iterations,
+                                      rerolled_hits=total_hits)
