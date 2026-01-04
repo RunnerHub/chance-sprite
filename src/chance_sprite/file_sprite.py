@@ -9,7 +9,7 @@ from typing import Any
 
 from platformdirs import PlatformDirs
 
-from . import APP_NAME
+from . import APP_NAME, emojis
 from .message_cache.message_codec import MessageCodec
 from .message_cache.message_record import MessageRecord
 
@@ -110,7 +110,8 @@ class RollRecordCacheFile(CacheFile[int, MessageRecord]):
         import chance_sprite.result_types as result_types
         import chance_sprite.roll_types as roll_types
         import chance_sprite.message_cache as message_cache
-        self.message_codec.build_registry([result_types, roll_types, message_cache])
+        from chance_sprite import ui
+        self.message_codec.build_registry([result_types, roll_types, message_cache, ui, emojis])
         super().__init__(filename)
 
     def _load(self) -> dict[int, MessageRecord]:
