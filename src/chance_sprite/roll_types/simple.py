@@ -11,25 +11,26 @@ from discord import ui, app_commands
 from chance_sprite.result_types import BreakTheLimitHitsResult
 from chance_sprite.result_types import HitsResult
 from chance_sprite.ui.generic_edge_menu import GenericEdgeMenu
-from ..discord_sprite import SpriteContext
-from ..emojis.emoji_manager import EmojiPacks
-from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..message_cache.message_record import MessageRecord
+from ..message_cache.roll_record_base import RollRecordBase
+from ..sprite_context import SpriteContext
 from ..ui.commonui import build_header, RollAccessor
+from ..ui.edge_menu_persist import EdgeMenuButton
 
 log = logging.getLogger(__name__)
 
 
 class SimpleResultView(ui.LayoutView):
-    def __init__(self,  roll_result:HitsResult, label: str, *, emoji_packs: EmojiPacks | None):
+    def __init__(self, roll_result: SimpleRollResult, label: str, *, sprite_context: SpriteContext):
         super().__init__(timeout=None)
-        self.result = roll_result
+        self.roll_result = roll_result
         self.label = label
-        self.emoji_packs = emoji_packs
+        self.sprite_context = sprite_context
         self._build()
 
     def _build(self):
-        container = build_header(self.label, 0x8888FF)
-        dice = self.result.render_roll_with_glitch(emoji_packs=self.emoji_packs)
+        container = build_header(EdgeMenuButton(self.sprite_context), self.label, 0x8888FF)
+        dice = self.roll_result.result.render_roll_with_glitch(emoji_packs=self.sprite_context.emoji_manager.packs)
         dice_section = ui.TextDisplay(dice)
         container.add_item(dice_section)
         self.add_item(container)
@@ -47,11 +48,17 @@ class SimpleRollResult(RollRecordBase):
         else:
             return SimpleRollResult(result=HitsResult.roll(dice=dice, limit=limit, gremlins=gremlins))
 
-    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
-        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
-            return SimpleResultView(self.result, label, emoji_packs=emoji_packs)
+    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
+        def _build(context: SpriteContext) -> ui.LayoutView:
+            return SimpleResultView(self, label, sprite_context=context)
         return _build
 
+    @staticmethod
+    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+        roll_accessor = RollAccessor[SimpleRollResult](getter=lambda r: r.result,
+                                                       setter=lambda r, v: replace(r, result=v))
+        await GenericEdgeMenu(f"Edge for {record.label}:", roll_accessor, record.message_id, context).send_as_followup(
+            interaction)
 
 def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="simple", description="Roll some d6s, Shadowrun-style.")
@@ -70,16 +77,6 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None,
         explode: bool = False
     ) -> None:
+        log.info(f"Received simple request in Channel {interaction.channel_id}: {interaction.channel}")
         result = SimpleRollResult.roll(dice=int(dice), limit=limit or 0, gremlins=gremlins or 0, explode=explode)
-        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
-        await interaction.response.send_message(view=primary_view)
-        record = await MessageRecord.from_interaction(
-            interaction=interaction,
-            label=label,
-            result=result
-        )
-        context.message_cache.put(record)
-
-        roll_accessor = RollAccessor[SimpleRollResult](getter=lambda r: r.result,
-                                                       setter=lambda r, v: replace(r, result=v))
-        await GenericEdgeMenu(f"Edge for {label}:", roll_accessor, record, context).send_as_followup(interaction)
+        record = await context.transmit_result(label=label, result=result, interaction=interaction)

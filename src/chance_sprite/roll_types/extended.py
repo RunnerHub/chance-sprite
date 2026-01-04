@@ -9,10 +9,11 @@ from discord import app_commands
 from discord import ui
 
 from chance_sprite.result_types import HitsResult
-from ..discord_sprite import SpriteContext
-from ..emojis.emoji_manager import EmojiPacks
-from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..message_cache.message_record import MessageRecord
+from ..message_cache.roll_record_base import RollRecordBase
+from ..sprite_context import SpriteContext
 from ..ui.commonui import build_header
+from ..ui.edge_menu_persist import EdgeMenuButton
 
 
 @dataclass(frozen=True)
@@ -65,10 +66,11 @@ class ExtendedResult(RollRecordBase):
             gremlins=gremlins
         )
 
-    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
-        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
+    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
+        def _build(context: SpriteContext) -> ui.LayoutView:
             accent = 0x88FF88 if self.succeeded else 0xFF8888
-            container = build_header(label, accent)
+            menu_button = EdgeMenuButton(context)
+            container = build_header(menu_button, label, accent)
 
             container.add_item(
                 ui.TextDisplay(
@@ -83,7 +85,7 @@ class ExtendedResult(RollRecordBase):
             prev = 0
             for it in self.iterations:
                 blocks.append(
-                    f"`{it.roll.dice}d6` {it.roll.render_dice(emoji_packs=emoji_packs)} [{prev}+**{it.roll.hits_limited}**=**{it.cumulative_hits}**]"
+                    f"`{it.roll.dice}d6` {it.roll.render_dice(emoji_packs=context.emoji_manager.packs)} [{prev}+**{it.roll.hits_limited}**=**{it.cumulative_hits}**]"
                 )
                 prev = it.cumulative_hits
 
@@ -112,6 +114,9 @@ class ExtendedResult(RollRecordBase):
             return view
         return _build
 
+    @staticmethod
+    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+        pass
 
 def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="extended", description="Extended roll: repeated tests with shrinking dice pool.")
@@ -133,11 +138,5 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ExtendedResult.roll(int(dice), int(threshold), int(max_iters), limit=limit or 0, gremlins=gremlins or 0)
-        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
-        await interaction.response.send_message(view=primary_view)
-        record = await MessageRecord.from_interaction(
-            interaction=interaction,
-            label=label,
-            result=result
-        )
-        context.message_cache.put(record)
+        record = await context.transmit_result(label=label, result=result, interaction=interaction)
+        await result.send_edge_menu(record, context, interaction)

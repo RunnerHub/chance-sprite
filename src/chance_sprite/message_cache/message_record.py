@@ -1,21 +1,11 @@
 from __future__ import annotations
 
-from abc import abstractmethod, ABC
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Callable
 
 import discord
-from discord import ui
 
-from chance_sprite.emojis.emoji_manager import EmojiPacks
-
-
-@dataclass(frozen=True, kw_only=True)
-class RollRecordBase(ABC):
-    @abstractmethod
-    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
-        raise NotImplementedError
+from chance_sprite.message_cache.roll_record_base import RollRecordBase
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -30,8 +20,8 @@ class MessageRecord[R: RollRecordBase]:
     roll_result: R
 
     @staticmethod
-    async def from_interaction(*, interaction: discord.Interaction, label: str,
-                               result: RollRecordBase) -> MessageRecord:
+    async def create_from_interaction(*, interaction: discord.Interaction, label: str,
+                                      result: RollRecordBase) -> MessageRecord:
         original_message = await interaction.original_response()
         now = datetime.now()
         expires_at = now + timedelta(days=7)

@@ -5,10 +5,8 @@ import imghdr
 import logging
 from dataclasses import dataclass
 from importlib import resources
-from typing import Callable
 
 import discord
-from discord import ui
 
 log = logging.getLogger(__name__)
 
@@ -20,16 +18,32 @@ class EmojiPacks:
     glitch: str
     critglitch: str
 
+
+EMPTY_EMOJI_PACK: EmojiPacks = EmojiPacks(
+    d6=[],
+    d6_ex=[],
+    edge=[],
+    glitch="",
+    critglitch=""
+)
+
+RAW_TEXT_EMOJI_PACK: EmojiPacks = EmojiPacks(
+    d6=[str(n + 1) for n in range(6)],
+    d6_ex=[str(n + 1) for n in range(6)],
+    edge=["reroll", "push", "higher"],
+    glitch="glitch",
+    critglitch="critglitch"
+)
+
 class EmojiManager:
-    """
-    - Loads emoji files from a directory
-    - Ensures each filename-stem exists as an *application emoji*
-    - Exposes mapping + convenience packs as "<:name:id>" strings
-    """
     def __init__(self, resource: str) -> None:
         self.resource = resource
         self.by_name: dict[str, discord.Emoji] = {}
-        self.packs: EmojiPacks | None = None
+        self.packs: EmojiPacks = EMPTY_EMOJI_PACK
+
+    @property
+    def loaded(self) -> bool:
+        return not self.packs is EMPTY_EMOJI_PACK
 
     def iter_emoji_assets(self):
         base = resources.files(self.resource)
@@ -73,7 +87,7 @@ class EmojiManager:
         log.info("Emoji sync complete. Uploaded: %d. Total now: %d", uploaded, len(self.by_name))
 
     def build_packs(self) -> EmojiPacks:
-        if self.packs:
+        if self.loaded:
             return self.packs
         """
         Define your packs by emoji *names*, then resolve to "<:name:id>" strings.
@@ -99,12 +113,3 @@ class EmojiManager:
         )
         self.packs = packs
         return packs
-
-    async def apply_emojis(self, interaction: discord.Interaction,
-                           view_builder: Callable[[EmojiPacks], ui.LayoutView]):
-        if self.packs:
-            view = view_builder(self.packs)
-        else:
-            view = ui.LayoutView()
-            view.add_item(ui.TextDisplay("Still loading emojis, please wait!"))
-        return view

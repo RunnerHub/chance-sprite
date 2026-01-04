@@ -9,10 +9,11 @@ from discord import app_commands
 from discord import ui
 
 from chance_sprite.result_types import HitsResult
-from ..discord_sprite import SpriteContext
-from ..emojis.emoji_manager import EmojiPacks
-from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..message_cache.message_record import MessageRecord
+from ..message_cache.roll_record_base import RollRecordBase
+from ..sprite_context import SpriteContext
 from ..ui.commonui import build_header, RollAccessor
+from ..ui.edge_menu_persist import EdgeMenuButton
 from ..ui.generic_edge_menu import GenericEdgeMenu
 
 
@@ -41,8 +42,8 @@ class OpposedResult(RollRecordBase):
         defender = HitsResult.roll(defender_dice, limit=defender_limit, gremlins=defender_gremlins)
         return OpposedResult(initiator=initiator, defender=defender)
 
-    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
-        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
+    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
+        def _build(context: SpriteContext) -> ui.LayoutView:
             # Color by outcome
             net = self.net_hits
             if net > 0:
@@ -52,14 +53,17 @@ class OpposedResult(RollRecordBase):
             else:
                 accent = 0x8888FF
 
-            container = build_header(label, accent)
+            menu_button = EdgeMenuButton(context)
+            container = build_header(menu_button, label, accent)
 
             # Initiator block
-            container.add_item(ui.TextDisplay(f"**Initiator:**\n{self.initiator.render_roll_with_glitch(emoji_packs=emoji_packs)}"))
+            container.add_item(ui.TextDisplay(
+                f"**Initiator:**\n{self.initiator.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)}"))
 
             container.add_item(ui.Separator())
             # Defender block
-            container.add_item(ui.TextDisplay(f"**Defender:**\n{self.defender.render_roll_with_glitch(emoji_packs=emoji_packs)}"))
+            container.add_item(ui.TextDisplay(
+                f"**Defender:**\n{self.defender.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)}"))
 
             # Outcome
             container.add_item(ui.Separator())
@@ -73,6 +77,13 @@ class OpposedResult(RollRecordBase):
             return view
         return _build
 
+    @staticmethod
+    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+        result_accessor = RollAccessor[OpposedResult](getter=lambda r: r.initiator,
+                                                      setter=lambda r, v: replace(r, initiator=v))
+        await GenericEdgeMenu(f"Edge initiator for {record.label}?", result_accessor, record.message_id,
+                              context).send_as_followup(
+            interaction)
 
 def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="opposed", description="Opposed roll: initiator vs defender. Defender wins ties.")
@@ -103,16 +114,6 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
             initiator_gremlins=initiator_gremlins or 0,
             defender_gremlins=defender_gremlins or 0
         )
-        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
-        await interaction.response.send_message(view=primary_view)
-        record = await MessageRecord.from_interaction(
-            interaction=interaction,
-            label=label,
-            result=result
-        )
-        context.message_cache.put(record)
+        record = await context.transmit_result(label=label, result=result, interaction=interaction)
 
-        result_accessor = RollAccessor[OpposedResult](getter=lambda r: r.initiator,
-                                                      setter=lambda r, v: replace(r, initiator=v))
-        await GenericEdgeMenu(f"Edge initiator for {label}?", result_accessor, record, context).send_as_followup(
-            interaction)
+        await result.send_edge_menu(record, context, interaction)

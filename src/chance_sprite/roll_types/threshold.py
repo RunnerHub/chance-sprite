@@ -10,10 +10,11 @@ from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
-from ..discord_sprite import SpriteContext
-from ..emojis.emoji_manager import EmojiPacks
-from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..message_cache.message_record import MessageRecord
+from ..message_cache.roll_record_base import RollRecordBase
+from ..sprite_context import SpriteContext
 from ..ui.commonui import build_header, RollAccessor
+from ..ui.edge_menu_persist import EdgeMenuButton
 from ..ui.generic_edge_menu import GenericEdgeMenu
 
 
@@ -54,14 +55,14 @@ class ThresholdResult(RollRecordBase):
             color = 0xCC44CC if succ else 0xCC4444
         return color
 
-    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
-        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
-            container = build_header(label, self.result_color)
+    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
+        def _build(context: SpriteContext) -> ui.LayoutView:
+            container = build_header(EdgeMenuButton(context), label, self.result_color)
 
-            dice = self.result.render_roll(emoji_packs=emoji_packs)
+            dice = self.result.render_roll(emoji_packs=context.emoji_manager.packs)
             if self.threshold:
                 dice += f" vs ({self.threshold})"
-            glitch = self.result.render_glitch(emoji_packs=emoji_packs)
+            glitch = self.result.render_glitch(emoji_packs=context.emoji_manager.packs)
             if glitch:
                 dice += "\n" + glitch
             container.add_item(ui.TextDisplay(dice))
@@ -74,6 +75,14 @@ class ThresholdResult(RollRecordBase):
             view.add_item(container)
             return view
         return _build
+
+    @staticmethod
+    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+        result_accessor = RollAccessor[ThresholdResult](getter=lambda r: r.result,
+                                                        setter=lambda r, v: replace(r, result=v))
+        await GenericEdgeMenu(f"Edge for {record.label}:", result_accessor, record.message_id,
+                              context).send_as_followup(interaction)
+
 
 
 def register(group: app_commands.Group, context: SpriteContext) -> None:
@@ -94,15 +103,4 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
         result = ThresholdResult.roll(dice=int(dice), threshold=threshold or 0, limit=limit or 0, gremlins=gremlins or 0)
-        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
-        await interaction.response.send_message(view=primary_view)
-        record = await MessageRecord.from_interaction(
-            interaction=interaction,
-            label=label,
-            result=result
-        )
-        context.message_cache.put(record)
-
-        result_accessor = RollAccessor[ThresholdResult](getter=lambda r: r.result,
-                                                        setter=lambda r, v: replace(r, result=v))
-        await GenericEdgeMenu(f"Edge for {label}:", result_accessor, record, context).send_as_followup(interaction)
+        await context.transmit_result(label=label, result=result, interaction=interaction)

@@ -5,40 +5,43 @@ from typing import Callable
 import discord
 from discord import ui, ButtonStyle, WebhookMessage
 
-from chance_sprite.discord_sprite import SpriteContext
-from chance_sprite.message_cache.roll_record import MessageRecord
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types.close_call_result import CloseCallResult
 from chance_sprite.result_types.hits_result import HitsResult
 from chance_sprite.result_types.push_limit_result import PushTheLimitHitsResult
 from chance_sprite.result_types.second_chance_result import SecondChanceHitsResult
+from chance_sprite.sprite_context import SpriteContext
 from chance_sprite.ui.commonui import GenericResultAccessor
 from chance_sprite.ui.confirm_modal import ConfirmModal
 from chance_sprite.ui.dice_input_modal import DiceInputModal
 
 
 class GenericEdgeMenu(ui.LayoutView):
-    def __init__(self, title: str, result_accessor: GenericResultAccessor, original_message: MessageRecord,
+    def __init__(self, title: str, result_accessor: GenericResultAccessor, original_message_id: int,
                  context: SpriteContext):
         super().__init__(timeout=None)
         self.result_accessor = result_accessor
-        self.original_message = original_message
+        self.original_message_id = original_message_id
         self.title = title
         self.context = context
         self.edge_buttons: list[ui.Button] = []
         self.followup_message: WebhookMessage | None = None
         self._build()
 
+    @property
+    def original_message(self):
+        return self.context.message_cache[self.original_message_id]
+
     def get_result(self):
-        self.original_message = self.context.message_cache[self.original_message.message_id]
-        return self.result_accessor.get(self.original_message)
+        original_message = self.context.message_cache[self.original_message_id]
+        return self.result_accessor.get(original_message)
 
     async def set_result(self, new_result, interaction: discord.Interaction):
-        new_record = await self.context.update_message(self.original_message, new_result, interaction)
-        self.original_message = new_record
+        await self.context.update_message(self.original_message, new_result, interaction)
 
     async def send_as_followup(self, interaction: discord.Interaction):
         self.followup_message = await interaction.followup.send(view=self, ephemeral=True, wait=True)
+        # self.followup_message = await interaction.edit_original_response(view=self)
 
 
     def _build(self):
@@ -93,6 +96,8 @@ class GenericEdgeMenu(ui.LayoutView):
         await self.set_result(new_result, interaction)
 
     async def on_second_chance_button(self, interaction: discord.Interaction):
+        # await self.on_second_chance_confirm(interaction)
+        # await self._after_use(interaction)
         await interaction.response.send_modal(
             ConfirmModal(
                 title="Confirm: 2nd Chance",

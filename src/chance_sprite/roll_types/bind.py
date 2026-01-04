@@ -10,10 +10,11 @@ from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
-from ..discord_sprite import SpriteContext
-from ..emojis.emoji_manager import EmojiPacks
-from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..message_cache.message_record import MessageRecord
+from ..message_cache.roll_record_base import RollRecordBase
+from ..sprite_context import SpriteContext
 from ..ui.commonui import build_header, RollAccessor
+from ..ui.edge_menu_persist import EdgeMenuButton
 from ..ui.generic_edge_menu import GenericEdgeMenu
 
 
@@ -100,14 +101,19 @@ class BindResult(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
-        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
-            container = build_header(label + f"\nForce {self.force} | **Binding Cost:** {self.bind_cost} reagents, 1 service", self.result_color)
+    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
+        def _build(context: SpriteContext) -> ui.LayoutView:
 
-            bind_line = "**Binding:**\n" + self.bind.render_roll_with_glitch(emoji_packs=emoji_packs)
+            menu_button = EdgeMenuButton(context)
+            container = build_header(menu_button,
+                                     label + f"\nForce {self.force} | **Binding Cost:** {self.bind_cost} reagents, 1 service",
+                                     self.result_color)
+
+            bind_line = "**Binding:**\n" + self.bind.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)
             container.add_item(ui.TextDisplay(bind_line))
 
-            resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch(emoji_packs=emoji_packs)
+            resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch(
+                emoji_packs=context.emoji_manager.packs)
             container.add_item(ui.TextDisplay(resist_line))
 
             services_changed = f"Services: **{self.services_in} → {self.services_out}**"
@@ -124,9 +130,9 @@ class BindResult(RollRecordBase):
 
             drain_line = (
                 "**Drain Resistance:**\n"
-                + self.drain.render_roll(emoji_packs=emoji_packs)
+                + self.drain.render_roll(emoji_packs=context.emoji_manager.packs)
                 + f" vs. DV{self.drain_value}{dv_note}"
-                + self.drain.render_glitch(emoji_packs=emoji_packs)
+                + self.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
             )
             container.add_item(ui.TextDisplay(drain_line))
 
@@ -140,6 +146,16 @@ class BindResult(RollRecordBase):
             return view
         return _build
 
+    @staticmethod
+    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction) -> None:
+        bind_accessor = RollAccessor[BindResult](getter=lambda r: r.bind, setter=lambda r, v: replace(r, bind=v))
+        await GenericEdgeMenu(f"Edge Binding for {record.label}?", bind_accessor, record.message_id,
+                              context).send_as_followup(
+            interaction)
+
+        drain_accessor = RollAccessor[BindResult](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
+        await GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id,
+                              context).send_as_followup(interaction)
 
 def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="bind", description="Binding test vs spirit resistance (2×Force) + drain (SR5).")
@@ -170,18 +186,6 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
             limit=int(limit) if limit is not None else None,
             drain_adjust=int(drain_adjust),
         )
-        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
-        await interaction.response.send_message(view=primary_view)
-        record = await MessageRecord.from_interaction(
-            interaction=interaction,
-            label=label,
-            result=result
-        )
-        context.message_cache.put(record)
+        record = await context.transmit_result(label=label, result=result, interaction=interaction)
 
-        bind_accessor = RollAccessor[BindResult](getter=lambda r: r.bind, setter=lambda r, v: replace(r, bind=v))
-        await GenericEdgeMenu(f"Edge Binding for {label}?", bind_accessor, record, context).send_as_followup(
-            interaction)
-
-        drain_accessor = RollAccessor[BindResult](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
-        await GenericEdgeMenu(f"Edge Drain for {label}?", drain_accessor, record, context).send_as_followup(interaction)
+        await result.send_edge_menu(record, context, interaction)

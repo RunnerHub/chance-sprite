@@ -11,7 +11,7 @@ from platformdirs import PlatformDirs
 
 from . import APP_NAME
 from .message_cache.message_codec import MessageCodec
-from .message_cache.roll_record import MessageRecord
+from .message_cache.message_record import MessageRecord
 
 log = logging.getLogger(__name__)
 
@@ -115,20 +115,18 @@ class RollRecordCacheFile(CacheFile[int, MessageRecord]):
 
     def _load(self) -> dict[int, MessageRecord]:
         data = super()._load()
-        restored = self.message_codec.decode(data)
+        restored = self.message_codec._decode_value(data, dict[int, MessageRecord])
         return restored
 
     def save(self) -> None:
         self._dir.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         encoded_data = self.message_codec.encode(self.data)
-        log.info(encoded_data)
         with tmp.open("w", encoding="utf-8") as f:
             json.dump(encoded_data, f, indent=2, ensure_ascii=False)
             f.flush()
             os.fsync(f.fileno())
         tmp.replace(self.path)
-        log.info("File saved!")
 
     def put(self, msg: MessageRecord) -> None:
         self.set(msg.message_id, msg)

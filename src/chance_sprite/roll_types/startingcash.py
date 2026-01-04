@@ -10,10 +10,11 @@ from discord import app_commands
 from discord import ui
 
 from chance_sprite.result_types import AdditiveResult
-from ..discord_sprite import SpriteContext
-from ..emojis.emoji_manager import EmojiPacks
-from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..message_cache.message_record import MessageRecord
+from ..message_cache.roll_record_base import RollRecordBase
+from ..sprite_context import SpriteContext
 from ..ui.commonui import build_header
+from ..ui.edge_menu_persist import EdgeMenuButton
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,11 +57,13 @@ class StartingCashResult(RollRecordBase):
     def roll(lifestyle: LifestyleStartingCash) -> StartingCashResult:
         return StartingCashResult(result=AdditiveResult.roll(lifestyle.dice), lifestyle=lifestyle)
 
-    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
-        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
-            container = build_header(f"{self.lifestyle.label} lifestyle starting cash\n{label}", self.lifestyle.color)
+    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
+        def _build(context: SpriteContext) -> ui.LayoutView:
+            container = build_header(EdgeMenuButton(context),
+                                     f"{self.lifestyle.label} lifestyle starting cash\n{label}",
+                                     self.lifestyle.color)
 
-            dice = self.result.render_dice(emoji_packs=emoji_packs)
+            dice = self.result.render_dice(emoji_packs=context.emoji_manager.packs)
             total = self.result.total_roll
             nuyen = self.result.total_roll * self.lifestyle.mult
             dice_line = f"`{self.result.dice}d6`{dice} Total: **{total}** × {self.lifestyle.mult}¥"
@@ -74,6 +77,9 @@ class StartingCashResult(RollRecordBase):
             return view
         return _build
 
+    @staticmethod
+    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+        pass
 
 def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="startingcash", description="Roll for starting cash.")
@@ -93,11 +99,4 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         lifestyle: app_commands.Choice[str]
     ) -> None:
         result = StartingCashResult.roll(lifestyle=LifestyleStartingCash[lifestyle.value])
-        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
-        await interaction.response.send_message(view=primary_view)
-        record = await MessageRecord.from_interaction(
-            interaction=interaction,
-            label=label,
-            result=result
-        )
-        context.message_cache.put(record)
+        await context.transmit_result(label=label, result=result, interaction=interaction)

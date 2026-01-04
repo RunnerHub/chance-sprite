@@ -10,10 +10,11 @@ from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
-from ..discord_sprite import SpriteContext
-from ..emojis.emoji_manager import EmojiPacks
-from ..message_cache.roll_record import MessageRecord, RollRecordBase
+from ..message_cache.message_record import MessageRecord
+from ..message_cache.roll_record_base import RollRecordBase
+from ..sprite_context import SpriteContext
 from ..ui.commonui import build_header, RollAccessor
+from ..ui.edge_menu_persist import EdgeMenuButton
 from ..ui.generic_edge_menu import GenericEdgeMenu
 
 
@@ -89,14 +90,14 @@ class SpellcastResult(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[EmojiPacks], ui.LayoutView]:
-        def _build(emoji_packs: EmojiPacks) -> ui.LayoutView:
-            container = build_header(label + f"\nForce {self.force}", self.result_color)
+    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
+        def _build(context: SpriteContext) -> ui.LayoutView:
+            container = build_header(EdgeMenuButton(context), label + f"\nForce {self.force}", self.result_color)
 
             # Spellcasting line: show raw hits and limited hits
             cast_line = (
                 f"**Spellcasting:**\n"
-                + self.cast.render_roll_with_glitch(emoji_packs=emoji_packs)
+                + self.cast.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)
             )
             container.add_item(ui.TextDisplay(cast_line))
             container.add_item(ui.Separator())
@@ -104,8 +105,8 @@ class SpellcastResult(RollRecordBase):
             # Drain line: threshold-style
             drain_line = (
                 f"**Drain:** \n"
-                + self.drain.render_roll(emoji_packs=emoji_packs) + f" vs. DV{self.drain_value}"
-                + self.drain.render_glitch(emoji_packs=emoji_packs)
+                + self.drain.render_roll(emoji_packs=context.emoji_manager.packs) + f" vs. DV{self.drain_value}"
+                + self.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
             )
             container.add_item(ui.TextDisplay(drain_line))
 
@@ -119,6 +120,17 @@ class SpellcastResult(RollRecordBase):
             return view
         return _build
 
+    @staticmethod
+    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+        cast_accessor = RollAccessor[SpellcastResult](getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v))
+        await GenericEdgeMenu(f"Edge Spellcasting for {record.label}?", cast_accessor, record.message_id,
+                              context).send_as_followup(
+            interaction)
+
+        drain_accessor = RollAccessor[SpellcastResult](getter=lambda r: r.drain,
+                                                       setter=lambda r, v: replace(r, drain=v))
+        await GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id,
+                              context).send_as_followup(interaction)
 
 def register(group: app_commands.Group, context: SpriteContext) -> None:
     @group.command(name="spellcast", description="Spellcasting test + drain resistance (SR5).")
@@ -146,19 +158,4 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
             drain_dice=int(drain_dice),
             limit=int(limit) if limit is not None else None,
         )
-        primary_view = await context.emoji_manager.apply_emojis(interaction, result.build_view(label))
-        await interaction.response.send_message(view=primary_view)
-        record = await MessageRecord.from_interaction(
-            interaction=interaction,
-            label=label,
-            result=result
-        )
-        context.message_cache.put(record)
-
-        cast_accessor = RollAccessor[SpellcastResult](getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v))
-        await GenericEdgeMenu(f"Edge Spellcasting for {label}?", cast_accessor, record, context).send_as_followup(
-            interaction)
-
-        drain_accessor = RollAccessor[SpellcastResult](getter=lambda r: r.drain,
-                                                       setter=lambda r, v: replace(r, drain=v))
-        await GenericEdgeMenu(f"Edge Drain for {label}?", drain_accessor, record, context).send_as_followup(interaction)
+        await context.transmit_result(label=label, result=result, interaction=interaction)

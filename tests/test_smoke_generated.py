@@ -3,14 +3,16 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
-from dataclasses import is_dataclass
 from dataclasses import dataclass
+from dataclasses import is_dataclass
 from enum import Enum
-from typing import Any, get_args, get_origin, get_type_hints
+from typing import Any, get_args, get_origin, get_type_hints, cast
 
 import pytest
 
-from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.emojis.emoji_manager import EmojiPacks, EmojiManager, RAW_TEXT_EMOJI_PACK
+from chance_sprite.file_sprite import RollRecordCacheFile
+from chance_sprite.sprite_context import SpriteContext
 
 PACKAGE = "chance_sprite.roll_types"
 
@@ -130,6 +132,13 @@ D6_EMOJIS = [
 ]
 emoji_packs = EmojiPacks(D6_EMOJIS, D6_EMOJIS, D6_EMOJIS, "glitch", "critical glitch")
 
+
+class FakeContext:
+    def __init__(self) -> None:
+        self.emoji_manager = EmojiManager("chance_sprite.emojis")
+        self.emoji_manager.packs = RAW_TEXT_EMOJI_PACK
+        self.message_cache = RollRecordCacheFile("message_cache.json")
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "case",
@@ -142,4 +151,5 @@ async def test_roll_smoke_per_item(case: Case) -> None:
 
     if hasattr(roll, "build_view"):
         builder = roll.build_view("Smoke")
-        builder(emoji_packs)
+        ctx = cast(SpriteContext, FakeContext())
+        builder(ctx)
