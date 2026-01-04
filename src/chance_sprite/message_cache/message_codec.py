@@ -90,7 +90,10 @@ class MessageCodec:
         # Resolve postponed annotations (and forward refs) to real types
         type_hints = self._hint_cache.get(cls)
         if type_hints is None:
-            type_hints = get_type_hints(cls)
+            try:
+                type_hints = get_type_hints(cls)
+            except NameError:
+                type_hints = getattr(cls, "__annotations__", {})
             self._hint_cache[cls] = type_hints
 
         kwargs = {}
