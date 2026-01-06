@@ -42,17 +42,17 @@ EMPTY_EMOJI_PACK: EmojiPack = EmojiPack(
 )
 
 RAW_TEXT_EMOJI_PACK: EmojiPack = EmojiPack(
-    d6=[str(n + 1) for n in range(6)],
-    d6_ex=[str(n + 1) for n in range(6)],
-    edge=["reroll", "push", "second_chance"],
-    glitch=("", "glitch", "critglitch")
+    d6=["①", "②", "③", "④", "❺", "❻"],
+    d6_ex=["①", "②", "③", "④", "❺", "❻"],
+    edge=["♻️", "⚡", "🛡️"],
+    glitch=("", "⚠", "🛑")
 )
 
 class EmojiManager:
     def __init__(self, resource: str) -> None:
         self.resource = resource
         self.by_name: dict[str, discord.Emoji] = {}
-        self.packs: EmojiPack = EMPTY_EMOJI_PACK
+        self.packs: EmojiPack = RAW_TEXT_EMOJI_PACK
 
     @property
     def loaded(self) -> bool:
@@ -100,8 +100,6 @@ class EmojiManager:
         log.info("Emoji sync complete. Uploaded: %d. Total now: %d", uploaded, len(self.by_name))
 
     def build_packs(self) -> EmojiPack:
-        if self.loaded:
-            return self.packs
         """
         Define your packs by emoji *names*, then resolve to "<:name:id>" strings.
         Fail fast if a required emoji is missing.

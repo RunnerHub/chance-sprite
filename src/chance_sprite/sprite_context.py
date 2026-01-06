@@ -4,7 +4,7 @@ import logging
 from dataclasses import replace
 from datetime import datetime, timedelta
 
-from discord import ui, Interaction, InteractionCallbackResponse, InteractionMessage
+from discord import Interaction, InteractionCallbackResponse, InteractionMessage
 from discord.ext import commands
 from discord.ui.view import LayoutView
 
@@ -44,9 +44,9 @@ class InteractionContext:
         view_builder = new_result.build_view(old_record.label)
         context = interaction.client
         emojis = interaction.client.emoji_manager.packs
-        if not emojis:
-            # TODO: don't choke
-            return
+        # TODO: await emoji sync and update
+        # if not context.emoji_manager.loaded:
+        #     pass
         view = view_builder(context)
         try:
             cached_message_handle = context.message_handles[old_record.message_id]
@@ -72,14 +72,12 @@ class InteractionContext:
         interaction = self.interaction
         context = self.interaction.client
         # TODO: await emoji sync and update
-        if context.emoji_manager.loaded:
-            view_builder = result.build_view(label)
-            primary_view = view_builder(context)
-        else:
-            primary_view = ui.LayoutView()
-            primary_view.add_item(ui.TextDisplay("Still loading emojis, please wait!"))
+        # if not context.emoji_manager.loaded:
+        #     pass
+        view_builder = result.build_view(label)
+        primary_view = view_builder(context)
         send_message_response: InteractionCallbackResponse[ClientContext] = await interaction.response.send_message(
-            view=primary_view)
+            view=primary_view, )
         message_id = send_message_response.message_id
         if isinstance(send_message_response.resource, InteractionMessage):
             message: InteractionMessage = send_message_response.resource
