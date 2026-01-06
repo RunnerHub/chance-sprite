@@ -18,6 +18,22 @@ class EmojiPack:
     glitch: tuple[str, str, str]
 
 
+keycaps_0_10 = "0️⃣ 1️⃣ 2️⃣ 3️⃣ 4️⃣ 5️⃣ 6️⃣ 7️⃣ 8️⃣ 9️⃣ 🔟"
+unicode_d6 = "⚀⚁⚂⚃⚄⚅"
+unicode_d6 = "⚀⚁⚂⚃⚄⚅"
+unicode_circle_filled = "❶❷❸❹❺❻❼❽❾❿"
+unicode_circle_empty = "⓪①②③④⑤⑥⑦⑧⑨⑩"
+unicode_parenthesized = "⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽"
+unicode_super = "⁰"
+unicode_sub = "₀"
+unicode_fullwidth = "０１２３４５６７８９"
+unicode_fullsmall = "０１２３４５６７８９"
+unicode_plusminus = "⊕⊖➕➖"
+unicode_refresh = "🔁🔄♻️"
+unicode_pushlimit = "🔥💥⚡⬆️"
+unicode_explode = "💥🎇"
+unicode_glitch = "⚠❗️🌀💀☠️🛑"
+
 EMPTY_EMOJI_PACK: EmojiPack = EmojiPack(
     d6=[],
     d6_ex=[],

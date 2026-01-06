@@ -10,16 +10,11 @@ class NumberInputModal(ui.Modal):
         super().__init__(title=title, timeout=None)
         self._do_action = do_action  # async (context, extra_dice:int) -> None
         self._on_after = on_after  # async (context) -> None
-        self.dice_to_add: ui.TextInput = ui.TextInput(
-            label=body,
-            placeholder="e.g. 3",
-            required=True,
-            min_length=1,
-            max_length=3,
-        )
+        self.dice_to_add: ui.TextInput = ui.TextInput(placeholder="e.g. 3", required=True, min_length=1, max_length=3, )
+        self.label = ui.Label(text=body, component=self.dice_to_add, description="Description")
         self.min_val = min_val
         self.max_val = max_val
-        self.add_item(self.dice_to_add)
+        self.add_item(self.label)
 
     async def on_submit(self, interaction: Interaction[ClientContext]) -> None:
         raw = str(self.dice_to_add.value).strip()
@@ -36,3 +31,16 @@ class NumberInputModal(ui.Modal):
 
         await self._do_action(interaction, extra)
         await self._on_after(interaction)
+
+
+class ConfirmModal(ui.Modal):
+    def __init__(self, title: str, *, body: str, do_action, on_after):
+        super().__init__(title=title, timeout=None)
+        self._do_action = do_action  # async (context) -> None
+        self._on_after = on_after  # async (context) -> None
+        confirm: ui.TextDisplay = ui.TextDisplay(body)
+        self.add_item(confirm)
+
+    async def on_submit(self, context: Interaction[ClientContext]) -> None:
+        await self._do_action(context)
+        await self._on_after(context)

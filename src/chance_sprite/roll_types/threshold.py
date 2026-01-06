@@ -10,6 +10,7 @@ from discord import ui
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
 from chance_sprite.roller import roll_hits
+from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
 from ..rollui.commonui import build_header, RollAccessor
@@ -18,8 +19,29 @@ from ..rollui.generic_edge_menu import GenericEdgeMenu
 from ..sprite_context import ClientContext, InteractionContext
 
 
+class ThresholdView(ui.LayoutView):
+    def __init__(self, roll: ThresholdRoll, label: str, context: ClientContext):
+        super().__init__(timeout=None)
+        container = build_header(EdgeMenuButton(), label, roll.result_color)
+
+        dice = roll.result.render_roll(emoji_packs=context.emoji_manager.packs)
+        if roll.threshold:
+            dice += f" vs ({roll.threshold})"
+        glitch = roll.result.render_glitch(emoji_packs=context.emoji_manager.packs)
+        if glitch:
+            dice += "\n" + glitch
+        container.add_item(ui.TextDisplay(dice))
+
+        if roll.threshold > 0:
+            outcome = "Succeeded!" if roll.succeeded else "Failed!"
+            container.add_item(ui.TextDisplay(f"**{outcome}** ({roll.net_hits:+d} net)"))
+
+        self.add_item(container)
+
+
+@message_codec.alias("ThresholdResult")
 @dataclass(frozen=True)
-class ThresholdResult(RollRecordBase):
+class ThresholdRoll(RollRecordBase):
     result: HitsResult
     threshold: int
 
@@ -36,10 +58,10 @@ class ThresholdResult(RollRecordBase):
         return self.result.hits_limited - self.threshold
 
     @staticmethod
-    def roll(dice: int, threshold: int, *, limit: int = 0, gremlins: int = 0) -> ThresholdResult:
+    def roll(dice: int, threshold: int, *, limit: int = 0, gremlins: int = 0):
         if threshold < 0:
             raise ValueError("threshold must be >= 0")
-        return ThresholdResult(result=roll_hits(dice, limit=limit, gremlins=gremlins), threshold=threshold)
+        return ThresholdRoll(result=roll_hits(dice, limit=limit, gremlins=gremlins), threshold=threshold)
 
     @property
     def result_color(self) -> int:
@@ -57,28 +79,12 @@ class ThresholdResult(RollRecordBase):
 
     def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
         def _build(context: ClientContext) -> ui.LayoutView:
-            container = build_header(EdgeMenuButton(), label, self.result_color)
-
-            dice = self.result.render_roll(emoji_packs=context.emoji_manager.packs)
-            if self.threshold:
-                dice += f" vs ({self.threshold})"
-            glitch = self.result.render_glitch(emoji_packs=context.emoji_manager.packs)
-            if glitch:
-                dice += "\n" + glitch
-            container.add_item(ui.TextDisplay(dice))
-
-            if self.threshold > 0:
-                outcome = "Succeeded!" if self.succeeded else "Failed!"
-                container.add_item(ui.TextDisplay(f"**{outcome}** ({self.net_hits:+d} net)"))
-
-            view = ui.LayoutView(timeout=None)
-            view.add_item(container)
-            return view
+            return ThresholdView(self, label, context)
         return _build
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
-        result_accessor = RollAccessor[ThresholdResult](getter=lambda r: r.result,
+        result_accessor = RollAccessor[ThresholdRoll](getter=lambda r: r.result,
                                                         setter=lambda r, v: replace(r, result=v))
         menu = GenericEdgeMenu(f"Edge for {record.label}:", result_accessor, record.message_id, interaction)
         await interaction.send_as_followup(menu)
@@ -100,5 +106,5 @@ def register(group: app_commands.Group) -> None:
                   limit: Optional[app_commands.Range[int, 1, 99]] = None,
                   gremlins: Optional[app_commands.Range[int, 1, 99]] = None
                   ) -> None:
-        result = ThresholdResult.roll(dice=int(dice), threshold=threshold or 0, limit=limit or 0, gremlins=gremlins or 0)
+        result = ThresholdRoll.roll(dice=int(dice), threshold=threshold or 0, limit=limit or 0, gremlins=gremlins or 0)
         await InteractionContext(interaction).transmit_result(label=label, result=result)

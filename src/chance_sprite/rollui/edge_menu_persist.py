@@ -4,7 +4,7 @@ import logging
 from typing import override, Any
 
 import discord
-from discord import ui, ButtonStyle, Interaction, Webhook
+from discord import ui, ButtonStyle, Interaction
 
 from chance_sprite.sprite_context import ClientContext, InteractionContext
 
@@ -26,25 +26,25 @@ class EdgeMenuButton(ui.Button):
 
     @override
     async def callback(self, interaction: Interaction[ClientContext]) -> Any:
-        log.info(f"Button clicked in in Channel {interaction.channel_id}: {interaction.channel_id}")
         interaction_context = InteractionContext(interaction)
-        # noinspection PyTypeChecker
-        followup: Webhook = interaction.followup
         # give the interaction a response so that our arbitrary number of menu followups will go through
         await interaction.response.defer(ephemeral=True)
-        # no need for this actually, since it's already a followup
         msg = interaction.message
         if msg is None:
-            await interaction.followup.send("No message context.", ephemeral=True)
+            await interaction.followup.send("Couldn't access the clicked message.", ephemeral=True)
             return
 
         message_record = interaction.client.message_cache[msg.id]
         if message_record is None:
-            await interaction.followup.send("That roll is no longer available.", ephemeral=True)
+            await interaction.followup.send(
+                "Couldn't find that roll in the bot's database. Could be a bug, or maybe it expired?", ephemeral=True)
             return
 
         user = interaction.user
         if user.id != message_record.owner_id:
             await interaction.followup.send("You are not the initiator of that message.", ephemeral=True)
             return
+        interaction_message = await interaction.original_response()
+        interaction_context.cache_message_handle(interaction_message)
+
         await message_record.roll_result.send_edge_menu(message_record, interaction_context)
