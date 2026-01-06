@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
 
 from discord import app_commands, Interaction
 from discord import ui
@@ -17,6 +16,24 @@ from ..rollui.commonui import build_header
 from ..rollui.edge_menu_persist import EdgeMenuButton
 from ..sprite_context import ClientContext, InteractionContext
 
+
+class StartingCashRollView(ui.LayoutView):
+    def __init__(self, roll_result: StartingCashRoll, label: str, *, context: ClientContext):
+        super().__init__(timeout=None)
+        container = build_header(EdgeMenuButton(),
+                                 f"{roll_result.lifestyle.label} lifestyle starting cash\n{label}",
+                                 roll_result.lifestyle.color)
+
+        dice = roll_result.result.render_dice(emoji_packs=context.emoji_manager.packs)
+        total = roll_result.result.total_roll
+        nuyen = roll_result.result.total_roll * roll_result.lifestyle.mult
+        dice_line = f"`{roll_result.result.dice}d6`{dice} Total: **{total}** × {roll_result.lifestyle.mult}¥"
+        outcome = f"# =¥{nuyen}"
+
+        container.add_item(ui.TextDisplay(dice_line))
+        container.add_item(ui.TextDisplay(outcome))
+
+        self.add_item(container)
 
 @dataclass(frozen=True, slots=True)
 class StartingCashSpec:
@@ -60,25 +77,8 @@ class StartingCashRoll(RollRecordBase):
     def roll(lifestyle: LifestyleStartingCash) -> StartingCashRoll:
         return StartingCashRoll(result=additive_roll(lifestyle.dice), lifestyle=lifestyle)
 
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
-        def _build(context: ClientContext) -> ui.LayoutView:
-            container = build_header(EdgeMenuButton(),
-                                     f"{self.lifestyle.label} lifestyle starting cash\n{label}",
-                                     self.lifestyle.color)
-
-            dice = self.result.render_dice(emoji_packs=context.emoji_manager.packs)
-            total = self.result.total_roll
-            nuyen = self.result.total_roll * self.lifestyle.mult
-            dice_line = f"`{self.result.dice}d6`{dice} Total: **{total}** × {self.lifestyle.mult}¥"
-            outcome = f"# =¥{nuyen}"
-
-            container.add_item(ui.TextDisplay(dice_line))
-            container.add_item(ui.TextDisplay(outcome))
-
-            view = ui.LayoutView(timeout=None)
-            view.add_item(container)
-            return view
-        return _build
+    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+        return StartingCashRollView(self, label, context=context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

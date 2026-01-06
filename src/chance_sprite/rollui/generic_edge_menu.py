@@ -178,6 +178,7 @@ class GenericEdgeMenu(ui.LayoutView):
         adjust_dice.base_view = self
         adjust_limit = AdjustLimitButton()
         adjust_limit.base_view = self
+        # noinspection PyTypeChecker
         dismiss = ui.Button(label="Dismiss", style=ButtonStyle.danger)
         dismiss.callback = self.on_dismiss_button
 

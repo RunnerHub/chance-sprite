@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Callable
+from typing import List, Optional
 
 from discord import app_commands, Interaction
 from discord import ui
@@ -16,6 +16,52 @@ from ..rollui.commonui import build_header
 from ..rollui.edge_menu_persist import EdgeMenuButton
 from ..sprite_context import ClientContext, InteractionContext
 
+
+class ExtendedRollView(ui.LayoutView):
+    def __init__(self, roll_result: ExtendedRoll, label: str, *, context: ClientContext):
+        super().__init__(timeout=None)
+        accent = 0x88FF88 if roll_result.succeeded else 0xFF8888
+        menu_button = EdgeMenuButton()
+        container = build_header(menu_button, label, accent)
+
+        container.add_item(
+            ui.TextDisplay(
+                f"Extended test: start **{roll_result.start_dice}** dice, threshold **{roll_result.threshold}**, max **{roll_result.max_iters}** roll(s)\n"
+            )
+        )
+
+        container.add_item(ui.Separator())
+
+        # Pack iterations into as few TextDisplays as possible to respect the ~30 component limit.
+        blocks: list[str] = []
+        prev = 0
+        for it in roll_result.iterations:
+            blocks.append(
+                f"`{it.roll.dice}d6` {it.roll.render_dice(emoji_packs=context.emoji_manager.packs)} [{prev}+**{it.roll.hits_limited}**=**{it.cumulative_hits}**]"
+            )
+            prev = it.cumulative_hits
+
+        # Split into chunks
+        chunk = ""
+        for b in blocks:
+            candidate = (chunk + "\n" + b).strip() if chunk else b
+            if len(candidate) > 1800:  # keep headroom
+                container.add_item(ui.TextDisplay(chunk))
+                chunk = b
+            else:
+                chunk = candidate
+
+        if chunk:
+            container.add_item(ui.TextDisplay(chunk))
+
+        container.add_item(ui.Separator())
+        container.add_item(
+            ui.TextDisplay(
+                f"Result: **{'Succeeded' if roll_result.succeeded else 'Failed'}** after **{roll_result.iters_used}** interval{"s" if roll_result.iters_used != 1 else ""} with {roll_result.final_hits} total hits (**{roll_result.final_hits - roll_result.threshold}** net)"
+            )
+        )
+
+        self.add_item(container)
 
 @dataclass(frozen=True)
 class ExtendedIteration:
@@ -68,53 +114,8 @@ class ExtendedRoll(RollRecordBase):
             gremlins=gremlins
         )
 
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
-        def _build(context: ClientContext) -> ui.LayoutView:
-            accent = 0x88FF88 if self.succeeded else 0xFF8888
-            menu_button = EdgeMenuButton()
-            container = build_header(menu_button, label, accent)
-
-            container.add_item(
-                ui.TextDisplay(
-                    f"Extended test: start **{self.start_dice}** dice, threshold **{self.threshold}**, max **{self.max_iters}** roll(s)\n"
-                )
-            )
-
-            container.add_item(ui.Separator())
-
-            # Pack iterations into as few TextDisplays as possible to respect the ~30 component limit.
-            blocks: list[str] = []
-            prev = 0
-            for it in self.iterations:
-                blocks.append(
-                    f"`{it.roll.dice}d6` {it.roll.render_dice(emoji_packs=context.emoji_manager.packs)} [{prev}+**{it.roll.hits_limited}**=**{it.cumulative_hits}**]"
-                )
-                prev = it.cumulative_hits
-
-            # Split into chunks
-            chunk = ""
-            for b in blocks:
-                candidate = (chunk + "\n" + b).strip() if chunk else b
-                if len(candidate) > 1800:  # keep headroom
-                    container.add_item(ui.TextDisplay(chunk))
-                    chunk = b
-                else:
-                    chunk = candidate
-
-            if chunk:
-                container.add_item(ui.TextDisplay(chunk))
-
-            container.add_item(ui.Separator())
-            container.add_item(
-                ui.TextDisplay(
-                    f"Result: **{'Succeeded' if self.succeeded else 'Failed'}** after **{self.iters_used}** interval{"s" if self.iters_used != 1 else ""} with {self.final_hits} total hits (**{self.final_hits - self.threshold}** net)"
-                )
-            )
-
-            view = ui.LayoutView(timeout=None)
-            view.add_item(container)
-            return view
-        return _build
+    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+        return ExtendedRollView(self, label, context=context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):

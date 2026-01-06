@@ -116,7 +116,7 @@ class RollRecordCacheFile(CacheFile[int, MessageRecord]):
 
     def _load(self) -> dict[int, MessageRecord]:
         data = super()._load()
-        restored = message_codec._decode_value(data, dict[int, MessageRecord])
+        restored = message_codec.decode_with_hint(data, dict[int, MessageRecord])
         return restored
 
     def save(self) -> None:

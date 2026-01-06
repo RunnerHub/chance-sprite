@@ -4,9 +4,10 @@ import random
 
 from msgspec import to_builtins
 
-from chance_sprite.result_types import _default_random, HitsResult, BreakTheLimitHitsResult, SecondChanceHitsResult, \
+from chance_sprite.result_types import HitsResult, BreakTheLimitHitsResult, SecondChanceHitsResult, \
     PushTheLimitHitsResult, CloseCallResult, AdditiveResult
 
+_default_random = random.Random()
 
 def roll_hits(dice: int, *, limit: int = 0, gremlins: int = 0, rng: random.Random = _default_random) -> HitsResult:
     rolls = [rng.randint(1, 6) for _ in range(dice)]

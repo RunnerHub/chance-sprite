@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional, Callable, Self
+from typing import Optional, Self
 
 from discord import app_commands, Interaction
 from discord import ui
@@ -16,6 +16,49 @@ from ..rollui.commonui import build_header, RollAccessor
 from ..rollui.edge_menu_persist import EdgeMenuButton
 from ..rollui.generic_edge_menu import GenericEdgeMenu
 from ..sprite_context import ClientContext, InteractionContext
+
+
+class BindingRollView(ui.LayoutView):
+    def __init__(self, roll_result: BindingRoll, label: str, *, context: ClientContext):
+        super().__init__(timeout=None)
+        menu_button = EdgeMenuButton()
+        container = build_header(menu_button,
+                                 label + f"\nForce {roll_result.force} | **Binding Cost:** {roll_result.bind_cost} reagents, 1 service",
+                                 roll_result.result_color)
+
+        bind_line = "**Binding:**\n" + roll_result.bind.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)
+        container.add_item(ui.TextDisplay(bind_line))
+
+        resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(
+            emoji_packs=context.emoji_manager.packs)
+        container.add_item(ui.TextDisplay(resist_line))
+
+        services_changed = f"Services: **{roll_result.services_in} → {roll_result.services_out}**"
+        if roll_result.succeeded:
+            container.add_item(ui.TextDisplay(f"Bound! Net hits: **{roll_result.net_hits}**. {services_changed}"))
+        else:
+            container.add_item(ui.TextDisplay(f"Binding failed. {services_changed}"))
+        container.add_item(ui.Separator())
+
+        dv_note = ""
+        if roll_result.drain_adjust != 0:
+            sign = "+" if roll_result.drain_adjust > 0 else ""
+            dv_note = f" (adj {sign}{roll_result.drain_adjust})"
+
+        drain_line = (
+                "**Drain Resistance:**\n"
+                + roll_result.drain.render_roll(emoji_packs=context.emoji_manager.packs)
+                + f" vs. DV{roll_result.drain_value}{dv_note}"
+                + roll_result.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
+        )
+        container.add_item(ui.TextDisplay(drain_line))
+
+        if roll_result.drain_taken > 0:
+            container.add_item(ui.TextDisplay(f"Took **{roll_result.drain_taken}** Drain!"))
+        else:
+            container.add_item(ui.TextDisplay("Resisted Drain!"))
+
+        self.add_item(container)
 
 
 @message_codec.alias("BindResult")
@@ -102,50 +145,8 @@ class BindingRoll(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
-        def _build(context: ClientContext) -> ui.LayoutView:
-
-            menu_button = EdgeMenuButton()
-            container = build_header(menu_button,
-                                     label + f"\nForce {self.force} | **Binding Cost:** {self.bind_cost} reagents, 1 service",
-                                     self.result_color)
-
-            bind_line = "**Binding:**\n" + self.bind.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)
-            container.add_item(ui.TextDisplay(bind_line))
-
-            resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch(
-                emoji_packs=context.emoji_manager.packs)
-            container.add_item(ui.TextDisplay(resist_line))
-
-            services_changed = f"Services: **{self.services_in} → {self.services_out}**"
-            if self.succeeded:
-                container.add_item(ui.TextDisplay(f"Bound! Net hits: **{self.net_hits}**. {services_changed}"))
-            else:
-                container.add_item(ui.TextDisplay(f"Binding failed. {services_changed}"))
-            container.add_item(ui.Separator())
-
-            dv_note = ""
-            if self.drain_adjust != 0:
-                sign = "+" if self.drain_adjust > 0 else ""
-                dv_note = f" (adj {sign}{self.drain_adjust})"
-
-            drain_line = (
-                "**Drain Resistance:**\n"
-                + self.drain.render_roll(emoji_packs=context.emoji_manager.packs)
-                + f" vs. DV{self.drain_value}{dv_note}"
-                + self.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
-            )
-            container.add_item(ui.TextDisplay(drain_line))
-
-            if self.drain_taken > 0:
-                container.add_item(ui.TextDisplay(f"Took **{self.drain_taken}** Drain!"))
-            else:
-                container.add_item(ui.TextDisplay("Resisted Drain!"))
-
-            view = ui.LayoutView(timeout=None)
-            view.add_item(container)
-            return view
-        return _build
+    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+        return BindingRollView(self, label, context=context)
 
     @classmethod
     async def send_edge_menu(cls, record: type[Self], interaction: InteractionContext):

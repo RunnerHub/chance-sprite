@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional, Callable
+from typing import Optional
 
 from discord import app_commands, Interaction
 from discord import ui
@@ -122,10 +122,8 @@ class SpellRoll(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
-        def _build(context: ClientContext) -> ui.LayoutView:
-            return SpellRollView(self, label, context=context)
-        return _build
+    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+        return SpellRollView(self, label, context=context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, kw_only=True)
 class RollRecordBase(ABC):
     @abstractmethod
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
+    def build_view(self, label: str, context) -> Callable[[ClientContext], ui.LayoutView]:
         raise NotImplementedError
 
     @classmethod

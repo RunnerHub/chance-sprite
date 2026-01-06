@@ -136,6 +136,7 @@ emoji_packs = EmojiPack(D6_EMOJIS, D6_EMOJIS, D6_EMOJIS, ("", "glitch", "critica
 class FakeContext:
     def __init__(self) -> None:
         self.emoji_manager = EmojiManager("chance_sprite.emojis")
+        # noinspection PyTypeChecker
         self.emoji_manager.by_name["alchemy"] = "asdf"
         self.emoji_manager.packs = RAW_TEXT_EMOJI_PACK
         self.message_cache = RollRecordCacheFile("message_cache.json")
@@ -151,7 +152,6 @@ async def test_roll_smoke_per_item(case: Case) -> None:
     roll = case.roll_fn(**kwargs)
 
     if hasattr(roll, "build_view"):
-        builder = roll.build_view("Smoke")
         # noinspection PyInvalidCast
-        ctx = cast(ClientContext, FakeContext())
-        builder(ctx)
+        context = cast(ClientContext, FakeContext())
+        builder = roll.build_view("Smoke", context)

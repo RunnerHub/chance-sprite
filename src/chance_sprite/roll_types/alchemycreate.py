@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional, Callable
+from typing import Optional
 
 from discord import app_commands, Interaction
 from discord import ui
@@ -35,10 +35,7 @@ class AlchemyCreateRollView(ui.LayoutView):
             cast_line += f"\nPotency: **{roll_result.potency}**"
         else:
             cast_line += f"\n**Attempt failed!**"
-        # alchemy_emoji = context.emoji_manager.by_name["alchemy"]
-        # alchemy_button = ui.Button(style=ButtonStyle.green, emoji=alchemy_emoji, label=f"Potency: {roll_result.potency}")
-        #
-        # cast_section = ui.Section(ui.TextDisplay(cast_line), accessory=alchemy_button)
+
         cast_section = ui.TextDisplay(cast_line)
         container.add_item(cast_section)
         container.add_item(ui.Separator())
@@ -59,7 +56,8 @@ class AlchemyCreateRollView(ui.LayoutView):
 
         self.add_item(container)
 
-    def result_color(self, roll_result: AlchemyCreateRoll) -> int:
+    @staticmethod
+    def result_color(roll_result: AlchemyCreateRoll) -> int:
         """
         Accent based on drain outcome (because that's the "did you take drain?" part),
         but still signal critical glitches.
@@ -140,11 +138,9 @@ class AlchemyCreateRoll(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
-        def _build(context: ClientContext) -> ui.LayoutView:
-            return AlchemyCreateRollView(self, label, context=context)
+    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+        return AlchemyCreateRollView(self, label, context=context)
 
-        return _build
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

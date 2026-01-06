@@ -44,7 +44,7 @@ class MessageCodec:
 
         return deco
 
-    def _decode_value(self, v, hint):
+    def decode_with_hint(self, v, hint):
         # If it's a tagged dict, dispatch regardless of hint
         if isinstance(v, dict) and "type" in v:
             return self.decode(v)
@@ -54,7 +54,7 @@ class MessageCodec:
             # try to use list[T] hint if present
             if get_origin(hint) is list:
                 (item_t,) = get_args(hint) or (Any,)
-                return [self._decode_value(x, item_t) for x in v]
+                return [self.decode_with_hint(x, item_t) for x in v]
             return [self.decode(x) if isinstance(x, dict) else x for x in v]
 
         if isinstance(v, dict):
@@ -73,12 +73,12 @@ class MessageCodec:
                     return k
 
                 return {
-                    coerce_key(k): self._decode_value(val, val_t)
+                    coerce_key(k): self.decode_with_hint(val, val_t)
                     for k, val in v.items()
                 }
 
             # No hint: do NOT coerce keys; just recurse values
-            return {k: self._decode_value(val, Any) for k, val in v.items()}
+            return {k: self.decode_with_hint(val, Any) for k, val in v.items()}
 
         return v
 
@@ -108,7 +108,7 @@ class MessageCodec:
         for f in fields(cls):
             if f.name in obj:
                 hint = type_hints.get(f.name, Any)
-                kwargs[f.name] = self._decode_value(obj[f.name], hint)
+                kwargs[f.name] = self.decode_with_hint(obj[f.name], hint)
         return cls(**kwargs)
 
     def encode(self, obj: Any) -> Any:

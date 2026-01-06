@@ -32,8 +32,8 @@ class InteractionContext:
     def __init__(self, interaction: Interaction[ClientContext]):
         self.interaction = interaction
 
-    def get_cached_record(self, id: int):
-        return self.interaction.client.message_cache[id]
+    def get_cached_record(self, message_id: int):
+        return self.interaction.client.message_cache[message_id]
 
     def cache_message_handle(self, handle: InteractionMessage):
         self.interaction.client.message_handles[handle.id] = handle
@@ -41,13 +41,12 @@ class InteractionContext:
     async def update_original(self, old_record: MessageRecord, new_result: RollRecordBase):
         await self.defer_if_needed()
         interaction = self.interaction
-        view_builder = new_result.build_view(old_record.label)
         context = interaction.client
-        emojis = interaction.client.emoji_manager.packs
+        view = new_result.build_view(old_record.label, context)
+        # emojis = interaction.client.emoji_manager.packs
         # TODO: await emoji sync and update
         # if not context.emoji_manager.loaded:
         #     pass
-        view = view_builder(context)
         try:
             cached_message_handle = context.message_handles[old_record.message_id]
             await cached_message_handle.edit(view=view)
@@ -74,7 +73,7 @@ class InteractionContext:
         # TODO: await emoji sync and update
         # if not context.emoji_manager.loaded:
         #     pass
-        view_builder = result.build_view(label)
+        view_builder = result.build_view(label, context)
         primary_view = view_builder(context)
         send_message_response: InteractionCallbackResponse[ClientContext] = await interaction.response.send_message(
             view=primary_view, )
@@ -104,6 +103,7 @@ class InteractionContext:
         return record
 
     async def defer_if_needed(self):
+        # noinspection PyUnresolvedReferences
         if not self.interaction.response.is_done():
             try:
                 await self.interaction.response.defer()

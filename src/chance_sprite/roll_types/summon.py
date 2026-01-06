@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional, Callable
+from typing import Optional
 
 from discord import app_commands, Interaction
 from discord import ui
@@ -10,6 +10,7 @@ from discord import ui
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
 from chance_sprite.roller import roll_hits
+from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
 from ..rollui.commonui import build_header, RollAccessor
@@ -18,8 +19,70 @@ from ..rollui.generic_edge_menu import GenericEdgeMenu
 from ..sprite_context import ClientContext, InteractionContext
 
 
+class SummonRollView(ui.LayoutView):
+    def __init__(self, roll_result: SummonRoll, label: str, *, context: ClientContext):
+        super().__init__(timeout=None)
+        container = build_header(EdgeMenuButton(), label + f"\nForce {roll_result.force}",
+                                 self.result_color(roll_result))
+
+        summon_line = "**Summoning:**\n" + roll_result.summon.render_roll_with_glitch(
+            emoji_packs=context.emoji_manager.packs)
+        container.add_item(ui.TextDisplay(summon_line))
+
+        resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(
+            emoji_packs=context.emoji_manager.packs)
+        container.add_item(ui.TextDisplay(resist_line))
+
+        if roll_result.succeeded:
+            container.add_item(ui.TextDisplay(f"Summoned! Services: **{roll_result.net_hits}**"))
+        else:
+            container.add_item(ui.TextDisplay(f"Summoning failed."))
+        container.add_item(ui.Separator())
+
+        dv_note = ""
+        if roll_result.drain_adjust != 0:
+            sign = "+" if roll_result.drain_adjust > 0 else ""
+            dv_note = f" (adj {sign}{roll_result.drain_adjust})"
+
+        drain_line = (
+                "**Drain Resistance:**\n"
+                + roll_result.drain.render_roll(emoji_packs=context.emoji_manager.packs)
+                + f" vs. DV{roll_result.drain_value}{dv_note}"
+                + roll_result.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
+        )
+        container.add_item(ui.TextDisplay(drain_line))
+
+        if roll_result.drain_taken > 0:
+            container.add_item(ui.TextDisplay(f"Took **{roll_result.drain_taken}** Drain!"))
+        else:
+            container.add_item(ui.TextDisplay("Resisted Drain!"))
+
+        self.add_item(container)
+
+    @staticmethod
+    def result_color(result: SummonRoll) -> int:
+        if (
+                result.summon.glitch == Glitch.CRITICAL
+                or result.resist.glitch == Glitch.CRITICAL
+                or result.drain.glitch == Glitch.CRITICAL
+        ):
+            return 0xFF0000
+
+        if (
+                result.summon.glitch == Glitch.GLITCH
+                or result.resist.glitch == Glitch.GLITCH
+                or result.drain.glitch == Glitch.GLITCH
+        ):
+            return 0xCC44CC if result.succeeded else 0xCC4444
+
+        if result.succeeded:
+            return 0x88FF88
+        return 0xFF8888 if result.drain_taken > 0 else 0xFFAA66
+
+
+@message_codec.alias("SummonResult")
 @dataclass(frozen=True)
-class SummonResult(RollRecordBase):
+class SummonRoll(RollRecordBase):
     # Inputs
     force: int
     drain_adjust: int  # additive override applied to DV after spirit hits
@@ -45,29 +108,6 @@ class SummonResult(RollRecordBase):
     def drain_taken(self) -> int:
         return max(0, self.drain_value - self.drain.hits_limited)
 
-    @property
-    def result_color(self) -> int:
-        # Critical glitch anywhere = red.
-        if (
-            self.summon.glitch == Glitch.CRITICAL
-            or self.resist.glitch == Glitch.CRITICAL
-            or self.drain.glitch == Glitch.CRITICAL
-        ):
-            return 0xFF0000
-
-        # Any glitch: purple-ish if success, red-ish if fail.
-        if (
-            self.summon.glitch == Glitch.GLITCH
-            or self.resist.glitch == Glitch.GLITCH
-            or self.drain.glitch == Glitch.GLITCH
-        ):
-            return 0xCC44CC if self.succeeded else 0xCC4444
-
-        # Otherwise: base on summon net hits outcome, with failure looking warmer for drain taken.
-        if self.succeeded:
-            return 0x88FF88
-        return 0xFF8888 if self.drain_taken > 0 else 0xFFAA66
-
     @staticmethod
     def roll(
         *,
@@ -76,14 +116,14 @@ class SummonResult(RollRecordBase):
         drain_dice: int,
         limit: Optional[int] = None,
         drain_adjust: int = 0,
-    ) -> SummonResult:
+    ) -> SummonRoll:
         lim = limit or force
 
         summon = roll_hits(int(summon_dice), limit=int(lim))
         resist = roll_hits(int(force))
         drain = roll_hits(int(drain_dice))
 
-        return SummonResult(
+        return SummonRoll(
             force=int(force),
             drain_adjust=int(drain_adjust),
             summon=summon,
@@ -91,56 +131,18 @@ class SummonResult(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
-        def _build(context: ClientContext) -> ui.LayoutView:
-            container = build_header(EdgeMenuButton(), label + f"\nForce {self.force}", self.result_color)
-
-            summon_line = "**Summoning:**\n" + self.summon.render_roll_with_glitch(
-                emoji_packs=context.emoji_manager.packs)
-            container.add_item(ui.TextDisplay(summon_line))
-
-            resist_line = f"**Spirit Resistance:**\n" + self.resist.render_roll_with_glitch(
-                emoji_packs=context.emoji_manager.packs)
-            container.add_item(ui.TextDisplay(resist_line))
-
-            if self.succeeded:
-                container.add_item(ui.TextDisplay(f"Summoned! Services: **{self.net_hits}**"))
-            else:
-                container.add_item(ui.TextDisplay(f"Summoning failed."))
-            container.add_item(ui.Separator())
-
-            dv_note = ""
-            if self.drain_adjust != 0:
-                sign = "+" if self.drain_adjust > 0 else ""
-                dv_note = f" (adj {sign}{self.drain_adjust})"
-
-            drain_line = (
-                "**Drain Resistance:**\n"
-                + self.drain.render_roll(emoji_packs=context.emoji_manager.packs)
-                + f" vs. DV{self.drain_value}{dv_note}"
-                + self.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
-            )
-            container.add_item(ui.TextDisplay(drain_line))
-
-            if self.drain_taken > 0:
-                container.add_item(ui.TextDisplay(f"Took **{self.drain_taken}** Drain!"))
-            else:
-                container.add_item(ui.TextDisplay("Resisted Drain!"))
-
-            view = ui.LayoutView(timeout=None)
-            view.add_item(container)
-            return view
-        return _build
+    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+        return SummonRollView(self, label, context=context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
-        summon_accessor = RollAccessor[SummonResult](getter=lambda r: r.summon,
+        summon_accessor = RollAccessor[SummonRoll](getter=lambda r: r.summon,
                                                      setter=lambda r, v: replace(r, summon=v))
         summon_menu = GenericEdgeMenu(f"Edge Summoning for {record.label}?", summon_accessor, record.message_id,
                                       interaction)
         await interaction.send_as_followup(summon_menu)
 
-        drain_accessor = RollAccessor[SummonResult](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
+        drain_accessor = RollAccessor[SummonRoll](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
         drain_menu = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, interaction)
         await interaction.send_as_followup(drain_menu)
 
@@ -163,7 +165,7 @@ def register(group: app_commands.Group) -> None:
                   limit: Optional[app_commands.Range[int, 1, 99]] = None,
                   drain_adjust: app_commands.Range[int, -99, 99] = 0,
                   ) -> None:
-        result = SummonResult.roll(
+        result = SummonRoll.roll(
             force=int(force),
             summon_dice=int(summon_dice),
             drain_dice=int(drain_dice),

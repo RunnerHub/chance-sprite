@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
-from typing import Optional, Callable
+from typing import Optional
 
 from discord import ui, app_commands, Interaction
 
@@ -46,10 +46,8 @@ class SimpleRoll(RollRecordBase):
         else:
             return SimpleRoll(result=roll_hits(dice=dice, limit=limit, gremlins=gremlins))
 
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
-        def _build(context: ClientContext) -> ui.LayoutView:
-            return SimpleResultView(self, label, sprite_context=context)
-        return _build
+    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+        return SimpleResultView(self, label, sprite_context=context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

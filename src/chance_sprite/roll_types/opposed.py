@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional, Callable
+from typing import Optional
 
 from discord import app_commands, Interaction
 from discord import ui
@@ -17,6 +17,39 @@ from ..rollui.edge_menu_persist import EdgeMenuButton
 from ..rollui.generic_edge_menu import GenericEdgeMenu
 from ..sprite_context import ClientContext, InteractionContext
 
+
+class OpposedRollView(ui.LayoutView):
+    def __init__(self, roll_result: OpposedRoll, label: str, *, context: ClientContext):
+        super().__init__(timeout=None)
+        # Color by outcome
+        net = roll_result.net_hits
+        if net > 0:
+            accent = 0x88FF88
+        elif net < 0:
+            accent = 0xFF8888
+        else:
+            accent = 0x8888FF
+
+        menu_button = EdgeMenuButton()
+        container = build_header(menu_button, label, accent)
+
+        # Initiator block
+        container.add_item(ui.TextDisplay(
+            f"**Initiator:**\n{roll_result.initiator.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)}"))
+
+        container.add_item(ui.Separator())
+        # Defender block
+        container.add_item(ui.TextDisplay(
+            f"**Defender:**\n{roll_result.defender.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)}"))
+
+        # Outcome
+        container.add_item(ui.Separator())
+        if net == 0:
+            container.add_item(ui.TextDisplay("Tie; Defender wins. (0 net hits)"))
+        else:
+            container.add_item(ui.TextDisplay(f"{roll_result.outcome} with **{net:+d}** net hits"))
+
+        self.add_item(container)
 
 @message_codec.alias("OpposedResult")
 @dataclass(frozen=True)
@@ -44,40 +77,8 @@ class OpposedRoll(RollRecordBase):
         defender = roll_hits(defender_dice, limit=defender_limit, gremlins=defender_gremlins)
         return OpposedRoll(initiator=initiator, defender=defender)
 
-    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
-        def _build(context: ClientContext) -> ui.LayoutView:
-            # Color by outcome
-            net = self.net_hits
-            if net > 0:
-                accent = 0x88FF88
-            elif net < 0:
-                accent = 0xFF8888
-            else:
-                accent = 0x8888FF
-
-            menu_button = EdgeMenuButton()
-            container = build_header(menu_button, label, accent)
-
-            # Initiator block
-            container.add_item(ui.TextDisplay(
-                f"**Initiator:**\n{self.initiator.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)}"))
-
-            container.add_item(ui.Separator())
-            # Defender block
-            container.add_item(ui.TextDisplay(
-                f"**Defender:**\n{self.defender.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)}"))
-
-            # Outcome
-            container.add_item(ui.Separator())
-            if net == 0:
-                container.add_item(ui.TextDisplay("Tie; Defender wins. (0 net hits)"))
-            else:
-                container.add_item(ui.TextDisplay(f"{self.outcome} with **{net:+d}** net hits"))
-
-            view = ui.LayoutView(timeout=None)
-            view.add_item(container)
-            return view
-        return _build
+    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+        return OpposedRollView(self, label, context=context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
