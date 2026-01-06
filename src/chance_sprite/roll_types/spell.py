@@ -4,22 +4,24 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Optional, Callable
 
-import discord
-from discord import app_commands
+from discord import app_commands, Interaction
 from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
+from chance_sprite.roller import roll_hits
+from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
-from ..sprite_context import SpriteContext
-from ..ui.commonui import build_header, RollAccessor
-from ..ui.edge_menu_persist import EdgeMenuButton
-from ..ui.generic_edge_menu import GenericEdgeMenu
+from ..rollui.commonui import build_header, RollAccessor
+from ..rollui.edge_menu_persist import EdgeMenuButton
+from ..rollui.generic_edge_menu import GenericEdgeMenu
+from ..sprite_context import ClientContext, InteractionContext
 
 
+@message_codec.alias("SpellcastResult")
 @dataclass(frozen=True)
-class SpellcastResult(RollRecordBase):
+class SpellRoll(RollRecordBase):
     # Inputs
     force: int
     limit: int
@@ -76,13 +78,14 @@ class SpellcastResult(RollRecordBase):
         drain_value: int,
         drain_dice: int,
         limit: Optional[int] = None,
-    ) -> SpellcastResult:
+    ) -> SpellRoll:
         lim = force if limit is None else limit
 
-        cast = HitsResult.roll(cast_dice, limit=limit or 0)
-        drain = HitsResult.roll(drain_dice)
+        cast = roll_hits(cast_dice, limit=limit or 0)
 
-        return SpellcastResult(
+        drain = roll_hits(drain_dice)
+
+        return SpellRoll(
             force=force,
             limit=lim,
             drain_value=drain_value,
@@ -90,9 +93,9 @@ class SpellcastResult(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
-        def _build(context: SpriteContext) -> ui.LayoutView:
-            container = build_header(EdgeMenuButton(context), label + f"\nForce {self.force}", self.result_color)
+    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
+        def _build(context: ClientContext) -> ui.LayoutView:
+            container = build_header(EdgeMenuButton(), label + f"\nForce {self.force}", self.result_color)
 
             # Spellcasting line: show raw hits and limited hits
             cast_line = (
@@ -120,19 +123,20 @@ class SpellcastResult(RollRecordBase):
             return view
         return _build
 
-    @staticmethod
-    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
-        cast_accessor = RollAccessor[SpellcastResult](getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v))
-        await GenericEdgeMenu(f"Edge Spellcasting for {record.label}?", cast_accessor, record.message_id,
-                              context).send_as_followup(
-            interaction)
+    @classmethod
+    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
+        cast_accessor = RollAccessor[SpellRoll](getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v))
+        edge_menu1 = GenericEdgeMenu(f"Edge Spellcasting for {record.label}?", cast_accessor, record.message_id,
+                                     interaction)
+        await interaction.send_as_followup(edge_menu1)
 
-        drain_accessor = RollAccessor[SpellcastResult](getter=lambda r: r.drain,
+        drain_accessor = RollAccessor[SpellRoll](getter=lambda r: r.drain,
                                                        setter=lambda r, v: replace(r, drain=v))
-        await GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id,
-                              context).send_as_followup(interaction)
+        menu2 = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, interaction)
+        await interaction.send_as_followup(menu2)
 
-def register(group: app_commands.Group, context: SpriteContext) -> None:
+
+def register(group: app_commands.Group) -> None:
     @group.command(name="spellcast", description="Spellcasting test + drain resistance (SR5).")
     @app_commands.describe(
         label="A label to describe the roll (spell name and target are a good start).",
@@ -143,7 +147,7 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         limit="Optional limit override (defaults to Force)."
     )
     async def cmd(
-        interaction: discord.Interaction,
+            interaction: Interaction[ClientContext],
         label: str,
         force: app_commands.Range[int, 1, 99],
         cast_dice: app_commands.Range[int, 1, 99],
@@ -151,11 +155,11 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         drain_dice: app_commands.Range[int, 1, 99],
         limit: Optional[app_commands.Range[int, 1, 99]] = None,
     ) -> None:
-        result = SpellcastResult.roll(
+        result = SpellRoll.roll(
             force=int(force),
             cast_dice=int(cast_dice),
             drain_value=int(drain_value),
             drain_dice=int(drain_dice),
             limit=int(limit) if limit is not None else None,
         )
-        await context.transmit_result(label=label, result=result, interaction=interaction)
+        await (InteractionContext(interaction).transmit_result(label=label, result=result))

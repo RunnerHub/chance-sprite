@@ -5,16 +5,17 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-import discord
-from discord import app_commands
+from discord import app_commands, Interaction
 from discord import ui
 
 from chance_sprite.result_types import AdditiveResult
+from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
-from ..sprite_context import SpriteContext
-from ..ui.commonui import build_header
-from ..ui.edge_menu_persist import EdgeMenuButton
+from ..roller import additive_roll
+from ..rollui.commonui import build_header
+from ..rollui.edge_menu_persist import EdgeMenuButton
+from ..sprite_context import ClientContext, InteractionContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,18 +49,20 @@ class LifestyleStartingCash(Enum):
     def color(self) -> int:
         return self.value.color
 
+
+@message_codec.alias("StartingCashResult")
 @dataclass(frozen=True)
-class StartingCashResult(RollRecordBase):
+class StartingCashRoll(RollRecordBase):
     result: AdditiveResult
     lifestyle: LifestyleStartingCash
 
     @staticmethod
-    def roll(lifestyle: LifestyleStartingCash) -> StartingCashResult:
-        return StartingCashResult(result=AdditiveResult.roll(lifestyle.dice), lifestyle=lifestyle)
+    def roll(lifestyle: LifestyleStartingCash) -> StartingCashRoll:
+        return StartingCashRoll(result=additive_roll(lifestyle.dice), lifestyle=lifestyle)
 
-    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
-        def _build(context: SpriteContext) -> ui.LayoutView:
-            container = build_header(EdgeMenuButton(context),
+    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
+        def _build(context: ClientContext) -> ui.LayoutView:
+            container = build_header(EdgeMenuButton(),
                                      f"{self.lifestyle.label} lifestyle starting cash\n{label}",
                                      self.lifestyle.color)
 
@@ -77,11 +80,12 @@ class StartingCashResult(RollRecordBase):
             return view
         return _build
 
-    @staticmethod
-    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+    @classmethod
+    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
         pass
 
-def register(group: app_commands.Group, context: SpriteContext) -> None:
+
+def register(group: app_commands.Group) -> None:
     @group.command(name="startingcash", description="Roll for starting cash.")
     @app_commands.describe(
         label="Who is it for?",
@@ -94,9 +98,9 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         ) for tier in LifestyleStartingCash
     ])
     async def cmd(
-        interaction: discord.Interaction,
+            interaction: Interaction[ClientContext],
         label: str,
         lifestyle: app_commands.Choice[str]
     ) -> None:
-        result = StartingCashResult.roll(lifestyle=LifestyleStartingCash[lifestyle.value])
-        await context.transmit_result(label=label, result=result, interaction=interaction)
+        result = StartingCashRoll.roll(lifestyle=LifestyleStartingCash[lifestyle.value])
+        await InteractionContext(interaction).transmit_result(label=label, result=result)

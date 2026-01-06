@@ -8,9 +8,10 @@ from typing import Any
 import discord
 from discord.ext import commands
 
-from chance_sprite.file_sprite import ConfigFile
-from chance_sprite.sprite_context import SpriteContext
-from chance_sprite.ui.edge_menu_persist import EdgeMenuPersist
+from chance_sprite.emojis.emoji_manager import EmojiManager
+from chance_sprite.file_sprite import ConfigFile, RollRecordCacheFile
+from chance_sprite.rollui.edge_menu_persist import EdgeMenuPersist
+from chance_sprite.sprite_context import ClientContext
 
 log = logging.getLogger(__name__)
 
@@ -19,21 +20,22 @@ EXTENSIONS: tuple[str, ...] = (
 )
 
 
-class DiscordSprite(commands.Bot):
+class DiscordSprite(ClientContext):
     def __init__(self, *, enable_sync: bool = True) -> None:
         self.config = ConfigFile[str, Any]("config.json")
-        self.context = SpriteContext()
         intents = discord.Intents.default()
         intents.guilds = True
         intents.guild_messages = True
         super().__init__(
+            emoji_manager=EmojiManager("chance_sprite.emojis"),
+            message_cache=RollRecordCacheFile("message_cache.json"),
             command_prefix=commands.when_mentioned,  # unused for slash-only; harmless
             intents=intents,
         )
         self.enable_global_sync = enable_sync
 
     async def setup_hook(self) -> None:
-        self.add_view(EdgeMenuPersist(self.context))
+        self.add_view(EdgeMenuPersist())
 
         # Load cogs/extensions
         for ext in EXTENSIONS:
@@ -59,5 +61,5 @@ class DiscordSprite(commands.Bot):
     async def on_ready(self) -> None:
         if self.user:
             print(f"Logged in as {self.user} (id={self.user.id})")
-        await self.context.emoji_manager.sync_application_emojis(self)
-        self.context.emoji_manager.build_packs()
+        await self.emoji_manager.sync_application_emojis(self)
+        self.emoji_manager.build_packs()

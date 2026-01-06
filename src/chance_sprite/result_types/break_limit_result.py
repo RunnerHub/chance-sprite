@@ -6,7 +6,7 @@ from functools import cached_property
 from itertools import zip_longest
 from typing import List, Iterable
 
-from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.emojis.emoji_manager import EmojiPack
 from chance_sprite.result_types.hits_result import HitsResult
 from . import _default_random, Glitch
 
@@ -67,27 +67,13 @@ class BreakTheLimitHitsResult(HitsResult):
         else:
             return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
 
-    def render_roll(self, *, emoji_packs: EmojiPacks):
+    def render_roll(self, *, emoji_packs: EmojiPack):
         line = super().render_roll(emoji_packs=emoji_packs)
         emojis = emoji_packs.d6_ex
         for roll in self.exploded_dice:
             line += f"\n`explode:`" + "".join(emojis[x - 1] for x in roll) + f"**{sum(1 for r in roll if r in (5, 6))}** hits"
         line += f"\n**{self.hits_limited}** Total Hits"
         return line
-
-    @staticmethod
-    def roll_exploding(dice: int, *, limit: int = 0, gremlins: int = 0, rng: random.Random = _default_random) -> BreakTheLimitHitsResult:
-        rolls = [rng.randint(1, 6) for _ in range(dice)]
-        exploded_dice = []
-        sixes = sum(1 for r in rolls if r==6)
-        while True:
-            rerolls = [rng.randint(1, 6) for _ in range(sixes)]
-            exploded_dice.append(rerolls)
-            sixes = sum(1 for r in rerolls if r == 6)
-            if sixes == 0:
-                break
-        return BreakTheLimitHitsResult(original_dice=dice, rolls=rolls, limit=limit, gremlins=gremlins,
-                                       exploded_dice=exploded_dice)
 
     def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
         new_dice_adjustment: int = self.dice_adjustment + adjustment

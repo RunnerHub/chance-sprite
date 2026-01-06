@@ -6,6 +6,8 @@ import pkgutil
 
 __all__ = []
 
+from chance_sprite.message_cache.message_codec import MessageCodec
+
 for info in pkgutil.iter_modules(__path__):
     # Try importing
     module = importlib.import_module(f"{__name__}.{info.name}")
@@ -20,3 +22,5 @@ for info in pkgutil.iter_modules(__path__):
         if getattr(obj, "__module__", None) == module.__name__:
             globals()[name] = obj
             __all__.append(name)
+
+message_codec = MessageCodec()

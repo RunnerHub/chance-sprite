@@ -4,13 +4,12 @@ from __future__ import annotations
 import logging
 
 from discord import app_commands
-
-from chance_sprite.discord_sprite import DiscordSprite
+from discord.ext import commands
 
 log = logging.getLogger(__name__)
 
 
-async def setup(bot: DiscordSprite) -> None:
+async def setup(bot: commands.Bot) -> None:
     group = app_commands.Group(name="rolld6", description="SR5 d6 dice rolling tools.")
     app_commands.allowed_installs(guilds=True, users=True)(group)
     app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)(group)
@@ -22,7 +21,7 @@ async def setup(bot: DiscordSprite) -> None:
         register = getattr(module, "register", None)
         if register is None:
             continue
-        register(group, bot.context)
+        register(group)
         registered += 1
 
     bot.tree.add_command(group)

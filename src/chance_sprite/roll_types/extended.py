@@ -4,16 +4,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Callable
 
-import discord
-from discord import app_commands
+from discord import app_commands, Interaction
 from discord import ui
 
 from chance_sprite.result_types import HitsResult
+from chance_sprite.roller import roll_hits
+from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
-from ..sprite_context import SpriteContext
-from ..ui.commonui import build_header
-from ..ui.edge_menu_persist import EdgeMenuButton
+from ..rollui.commonui import build_header
+from ..rollui.edge_menu_persist import EdgeMenuButton
+from ..sprite_context import ClientContext, InteractionContext
 
 
 @dataclass(frozen=True)
@@ -23,8 +24,9 @@ class ExtendedIteration:
     cumulative_hits: int
 
 
+@message_codec.alias("ExtendedResult")
 @dataclass(frozen=True)
-class ExtendedResult(RollRecordBase):
+class ExtendedRoll(RollRecordBase):
     start_dice: int
     threshold: int
     max_iters: int
@@ -36,7 +38,7 @@ class ExtendedResult(RollRecordBase):
     gremlins: int
 
     @staticmethod
-    def roll(dice: int, threshold: int, max_iters: int, limit: int, gremlins: int) -> ExtendedResult:
+    def roll(dice: int, threshold: int, max_iters: int, limit: int, gremlins: int) -> ExtendedRoll:
         iterations: List[ExtendedIteration] = []
         cumulative = 0
         iters_used = 0
@@ -46,7 +48,7 @@ class ExtendedResult(RollRecordBase):
             if pool < 1:
                 break
 
-            r = HitsResult.roll(pool, limit=limit, gremlins=gremlins)
+            r = roll_hits(pool, limit=limit, gremlins=gremlins)
             cumulative += r.hits_limited
             iters_used += 1
             iterations.append(ExtendedIteration(n=i, roll=r, cumulative_hits=cumulative))
@@ -54,7 +56,7 @@ class ExtendedResult(RollRecordBase):
             if cumulative >= threshold:
                 break
 
-        return ExtendedResult(
+        return ExtendedRoll(
             start_dice=dice,
             threshold=threshold,
             max_iters=max_iters,
@@ -66,10 +68,10 @@ class ExtendedResult(RollRecordBase):
             gremlins=gremlins
         )
 
-    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
-        def _build(context: SpriteContext) -> ui.LayoutView:
+    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
+        def _build(context: ClientContext) -> ui.LayoutView:
             accent = 0x88FF88 if self.succeeded else 0xFF8888
-            menu_button = EdgeMenuButton(context)
+            menu_button = EdgeMenuButton()
             container = build_header(menu_button, label, accent)
 
             container.add_item(
@@ -114,11 +116,12 @@ class ExtendedResult(RollRecordBase):
             return view
         return _build
 
-    @staticmethod
-    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+    @classmethod
+    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
         pass
 
-def register(group: app_commands.Group, context: SpriteContext) -> None:
+
+def register(group: app_commands.Group) -> None:
     @group.command(name="extended", description="Extended roll: repeated tests with shrinking dice pool.")
     @app_commands.describe(
         label="A label to describe the roll.",
@@ -129,7 +132,7 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         gremlins="Reduce the number of 1s required for a glitch."
     )
     async def cmd(
-        interaction: discord.Interaction,
+            interaction: Interaction[ClientContext],
         label: str,
         dice: app_commands.Range[int, 1, 99],
         threshold: app_commands.Range[int, 1, 99],
@@ -137,6 +140,5 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         limit: Optional[app_commands.Range[int, 1, 99]] = None,
         gremlins: Optional[app_commands.Range[int, 1, 99]] = None
     ) -> None:
-        result = ExtendedResult.roll(int(dice), int(threshold), int(max_iters), limit=limit or 0, gremlins=gremlins or 0)
-        record = await context.transmit_result(label=label, result=result, interaction=interaction)
-        await result.send_edge_menu(record, context, interaction)
+        result = ExtendedRoll.roll(int(dice), int(threshold), int(max_iters), limit=limit or 0, gremlins=gremlins or 0)
+        await InteractionContext(interaction).transmit_result(label=label, result=result)

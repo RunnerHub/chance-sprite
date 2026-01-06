@@ -9,8 +9,8 @@ from typing import Any
 
 from platformdirs import PlatformDirs
 
-from . import APP_NAME, emojis
-from .message_cache.message_codec import MessageCodec
+from . import APP_NAME
+from .message_cache import message_codec
 from .message_cache.message_record import MessageRecord
 
 log = logging.getLogger(__name__)
@@ -106,23 +106,23 @@ class StateFile[K, V](WriteableFile[K, V]):
 
 class RollRecordCacheFile(CacheFile[int, MessageRecord]):
     def __init__(self, filename: str):
-        self.message_codec = MessageCodec()
-        import chance_sprite.result_types as result_types
-        import chance_sprite.roll_types as roll_types
-        import chance_sprite.message_cache as message_cache
-        from chance_sprite import ui
-        self.message_codec.build_registry([result_types, roll_types, message_cache, ui, emojis])
+        from . import result_types
+        from . import roll_types
+        from . import message_cache
+        from . import rollui
+        from . import emojis
+        message_codec.build_registry([result_types, roll_types, message_cache, rollui, emojis])
         super().__init__(filename)
 
     def _load(self) -> dict[int, MessageRecord]:
         data = super()._load()
-        restored = self.message_codec._decode_value(data, dict[int, MessageRecord])
+        restored = message_codec._decode_value(data, dict[int, MessageRecord])
         return restored
 
     def save(self) -> None:
         self._dir.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
-        encoded_data = self.message_codec.encode(self.data)
+        encoded_data = message_codec.encode(self.data)
         with tmp.open("w", encoding="utf-8") as f:
             json.dump(encoded_data, f, indent=2, ensure_ascii=False)
             f.flush()

@@ -18,7 +18,7 @@ for info in pkgutil.iter_modules(__path__):
         if name.startswith("_"):
             continue
 
-        # Only export things defined in that module
+        # Only export things defined in this module
         if getattr(obj, "__module__", None) == module.__name__:
             globals()[name] = obj
             __all__.append(name)

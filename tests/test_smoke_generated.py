@@ -10,9 +10,9 @@ from typing import Any, get_args, get_origin, get_type_hints, cast
 
 import pytest
 
-from chance_sprite.emojis.emoji_manager import EmojiPacks, EmojiManager, RAW_TEXT_EMOJI_PACK
+from chance_sprite.emojis.emoji_manager import EmojiPack, EmojiManager, RAW_TEXT_EMOJI_PACK
 from chance_sprite.file_sprite import RollRecordCacheFile
-from chance_sprite.sprite_context import SpriteContext
+from chance_sprite.sprite_context import ClientContext
 
 PACKAGE = "chance_sprite.roll_types"
 
@@ -130,7 +130,7 @@ D6_EMOJIS = [
     "<:d6r5:1447759074119778396>",
     "<:d6r6:1447759073096368149>",
 ]
-emoji_packs = EmojiPacks(D6_EMOJIS, D6_EMOJIS, D6_EMOJIS, "glitch", "critical glitch")
+emoji_packs = EmojiPack(D6_EMOJIS, D6_EMOJIS, D6_EMOJIS, ("", "glitch", "critical glitch"))
 
 
 class FakeContext:
@@ -151,5 +151,6 @@ async def test_roll_smoke_per_item(case: Case) -> None:
 
     if hasattr(roll, "build_view"):
         builder = roll.build_view("Smoke")
-        ctx = cast(SpriteContext, FakeContext())
+        # noinspection PyInvalidCast
+        ctx = cast(ClientContext, FakeContext())
         builder(ctx)

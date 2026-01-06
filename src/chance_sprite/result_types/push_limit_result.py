@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-import random
 from dataclasses import dataclass
 from typing import List
 
-from msgspec import to_builtins
-
-from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.emojis.emoji_manager import EmojiPack
 from chance_sprite.result_types.hits_result import HitsResult
-from . import _default_random
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -26,7 +22,7 @@ class PushTheLimitHitsResult(HitsResult):
         else:
             return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
 
-    def render_roll(self, *, emoji_packs: EmojiPacks):
+    def render_roll(self, *, emoji_packs: EmojiPack):
         line = super().render_roll(emoji_packs=emoji_packs)
         emojis = emoji_packs.d6_ex
         line += f"\n`>push:`" + "".join(emojis[x - 1] for x in self.exploded_dice[0]) + f" **{sum(1 for r in self.exploded_dice[0] if r in (5, 6))}** hits"
@@ -34,19 +30,3 @@ class PushTheLimitHitsResult(HitsResult):
             line += f"\n`explode:`" + "".join(emojis[x - 1] for x in roll) + f" **{sum(1 for r in roll if r in (5, 6))}** hits"
         line += f"\n**{self.hits_limited}** Total Hits"
         return line
-
-    @staticmethod
-    def from_hits_result(hits_result: HitsResult, edge: int, rng: random.Random = _default_random):
-        explosion_iterations = []
-        sixes = edge
-        total_hits = 0
-        while True:
-            rerolls = [rng.randint(1, 6) for _ in range(sixes)]
-            explosion_iterations.append(rerolls)
-            sixes = sum(1 for r in rerolls if r == 6)
-            total_hits += sum(1 for r in rerolls if r in (5, 6))
-            if sixes == 0:
-                break
-
-        return PushTheLimitHitsResult(**to_builtins(hits_result), exploded_dice=explosion_iterations,
-                                      rerolled_hits=total_hits)

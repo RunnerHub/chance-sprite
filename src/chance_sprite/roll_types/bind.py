@@ -2,24 +2,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Optional, Callable
+from typing import Optional, Callable, Self
 
-import discord
-from discord import app_commands
+from discord import app_commands, Interaction
 from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
-from ..message_cache.message_record import MessageRecord
+from chance_sprite.roller import roll_hits
+from ..message_cache import message_codec
 from ..message_cache.roll_record_base import RollRecordBase
-from ..sprite_context import SpriteContext
-from ..ui.commonui import build_header, RollAccessor
-from ..ui.edge_menu_persist import EdgeMenuButton
-from ..ui.generic_edge_menu import GenericEdgeMenu
+from ..rollui.commonui import build_header, RollAccessor
+from ..rollui.edge_menu_persist import EdgeMenuButton
+from ..rollui.generic_edge_menu import GenericEdgeMenu
+from ..sprite_context import ClientContext, InteractionContext
 
 
+@message_codec.alias("BindResult")
 @dataclass(frozen=True)
-class BindResult(RollRecordBase):
+class BindingRoll(RollRecordBase):
     # Inputs
     force: int
     services_in: int
@@ -85,14 +86,14 @@ class BindResult(RollRecordBase):
         services_in: int,
         limit: Optional[int] = None,
         drain_adjust: int = 0,
-    ) -> BindResult:
+    ) -> BindingRoll:
         lim = limit or force
 
-        bind = HitsResult.roll(bind_dice, limit=int(lim))
-        resist = HitsResult.roll(force * 2)
-        drain = HitsResult.roll(drain_dice)
+        bind = roll_hits(bind_dice, limit=int(lim))
+        resist = roll_hits(force * 2)
+        drain = roll_hits(drain_dice)
 
-        return BindResult(
+        return BindingRoll(
             force=int(force),
             services_in=int(services_in),
             drain_adjust=int(drain_adjust),
@@ -101,10 +102,10 @@ class BindResult(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
-        def _build(context: SpriteContext) -> ui.LayoutView:
+    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
+        def _build(context: ClientContext) -> ui.LayoutView:
 
-            menu_button = EdgeMenuButton(context)
+            menu_button = EdgeMenuButton()
             container = build_header(menu_button,
                                      label + f"\nForce {self.force} | **Binding Cost:** {self.bind_cost} reagents, 1 service",
                                      self.result_color)
@@ -146,18 +147,18 @@ class BindResult(RollRecordBase):
             return view
         return _build
 
-    @staticmethod
-    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction) -> None:
-        bind_accessor = RollAccessor[BindResult](getter=lambda r: r.bind, setter=lambda r, v: replace(r, bind=v))
-        await GenericEdgeMenu(f"Edge Binding for {record.label}?", bind_accessor, record.message_id,
-                              context).send_as_followup(
-            interaction)
+    @classmethod
+    async def send_edge_menu(cls, record: type[Self], interaction: InteractionContext):
+        bind_accessor = RollAccessor[BindingRoll](getter=lambda r: r.bind, setter=lambda r, v: replace(r, bind=v))
+        bind_menu = GenericEdgeMenu(f"Edge Binding for {record.label}?", bind_accessor, record.message_id, interaction)
+        await interaction.send_as_followup(bind_menu)
 
-        drain_accessor = RollAccessor[BindResult](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
-        await GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id,
-                              context).send_as_followup(interaction)
+        drain_accessor = RollAccessor[BindingRoll](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
+        drain_menu = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, interaction)
+        await interaction.send_as_followup(drain_menu)
 
-def register(group: app_commands.Group, context: SpriteContext) -> None:
+
+def register(group: app_commands.Group) -> None:
     @group.command(name="bind", description="Binding test vs spirit resistance (2×Force) + drain (SR5).")
     @app_commands.describe(
         label="A label to describe the roll (spirit type + prep are a good start).",
@@ -169,7 +170,7 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         drain_adjust="Optional adjustment to drain DV (additive; can be negative).",
     )
     async def cmd(
-        interaction: discord.Interaction,
+            interaction: Interaction[ClientContext],
         label: str,
         force: app_commands.Range[int, 1, 99],
         services_in: app_commands.Range[int, 0, 99],
@@ -178,7 +179,7 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         limit: Optional[app_commands.Range[int, 1, 99]] = None,
         drain_adjust: app_commands.Range[int, -99, 99] = 0,
     ) -> None:
-        result = BindResult.roll(
+        result = BindingRoll.roll(
             force=int(force),
             services_in=int(services_in),
             bind_dice=int(bind_dice),
@@ -186,6 +187,4 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
             limit=int(limit) if limit is not None else None,
             drain_adjust=int(drain_adjust),
         )
-        record = await context.transmit_result(label=label, result=result, interaction=interaction)
-
-        await result.send_edge_menu(record, context, interaction)
+        await InteractionContext(interaction).transmit_result(label=label, result=result)

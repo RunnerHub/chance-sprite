@@ -37,6 +37,13 @@ class MessageCodec:
 
         return deco
 
+    def alias(self, tag: str):
+        def deco(cls: type):
+            self.registry[tag] = cls
+            return cls
+
+        return deco
+
     def _decode_value(self, v, hint):
         # If it's a tagged dict, dispatch regardless of hint
         if isinstance(v, dict) and "type" in v:
@@ -89,11 +96,12 @@ class MessageCodec:
 
         # Resolve postponed annotations (and forward refs) to real types
         type_hints = self._hint_cache.get(cls)
+
         if type_hints is None:
-            try:
-                type_hints = get_type_hints(cls)
-            except NameError:
-                type_hints = getattr(cls, "__annotations__", {})
+            # try:
+            type_hints = get_type_hints(cls)
+            # except NameError:
+            #     type_hints = getattr(cls, "__annotations__", {})
             self._hint_cache[cls] = type_hints
 
         kwargs = {}

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
-import discord
-from discord import ui
+from discord import ui, Interaction
+
+from chance_sprite.sprite_context import ClientContext
 
 
-class DiceInputModal(ui.Modal):
+class NumberInputModal(ui.Modal):
     def __init__(self, title: str, body: str, *, do_action, on_after, min_val:int=0, max_val:int=99):
         super().__init__(title=title, timeout=None)
-        self._do_action = do_action      # async (interaction, extra_dice:int) -> None
-        self._on_after = on_after        # async (interaction) -> None
+        self._do_action = do_action  # async (context, extra_dice:int) -> None
+        self._on_after = on_after  # async (context) -> None
         self.dice_to_add: ui.TextInput = ui.TextInput(
             label=body,
             placeholder="e.g. 3",
@@ -20,7 +21,7 @@ class DiceInputModal(ui.Modal):
         self.max_val = max_val
         self.add_item(self.dice_to_add)
 
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def on_submit(self, interaction: Interaction[ClientContext]) -> None:
         raw = str(self.dice_to_add.value).strip()
         try:
             extra = int(raw)
@@ -29,7 +30,7 @@ class DiceInputModal(ui.Modal):
             return
 
         if extra < self.min_val or extra > self.max_val:
-            await interaction.response.send_message(f"Pick a dice count between {min} and {max}.", ephemeral=True,
+            await interaction.response.send_message(f"Pick a number between {min} and {max}.", ephemeral=True,
                                                     delete_after=5)
             return
 

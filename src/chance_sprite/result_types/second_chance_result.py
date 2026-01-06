@@ -4,9 +4,7 @@ import random
 from dataclasses import dataclass, replace
 from typing import List
 
-from msgspec import to_builtins
-
-from chance_sprite.emojis.emoji_manager import EmojiPacks
+from chance_sprite.emojis.emoji_manager import EmojiPack
 from chance_sprite.result_types.hits_result import HitsResult
 from . import _default_random
 
@@ -34,12 +32,12 @@ class SecondChanceHitsResult(HitsResult):
         else:
             return f" **{total_hits}** hit{'' if total_hits == 1 else 's'}"
 
-    def render_roll(self, *, emoji_packs: EmojiPacks):
+    def render_roll(self, *, emoji_packs: EmojiPack):
         line = super().render_roll(emoji_packs=emoji_packs)
         line += f"\n`>edge:`" + self.render_rerolls(emoji_packs=emoji_packs) + self.render_limited_rerolled_hits()
         return line
 
-    def render_rerolls(self, *, emoji_packs: EmojiPacks) -> str:
+    def render_rerolls(self, *, emoji_packs: EmojiPack) -> str:
         emojis = emoji_packs.d6
         n_original_hits = sum(1 for r in self.rolls[:self.original_dice] if r in (5, 6))
         n_original_rerolls = self.original_dice - n_original_hits
@@ -57,12 +55,6 @@ class SecondChanceHitsResult(HitsResult):
             if len(self.rerolled_dice) > n_current_rerolls:
                 line += "-~~" + "".join(str(x) for x in self.rerolled_dice[n_current_rerolls:]) + "~~"
         return line
-
-    @staticmethod
-    def from_hitsresult(hits_result: HitsResult, rng: random.Random = _default_random):
-        rerolls = [rng.randint(1, 6) for _ in range(hits_result.dice - hits_result.dice_hits)]
-        new_hits = sum(1 for r in rerolls if r in (5, 6))
-        return SecondChanceHitsResult(**to_builtins(hits_result), rerolled_dice=rerolls, rerolled_hits=new_hits)
 
     def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
         replacement_base = super().adjust_dice(adjustment, rng)

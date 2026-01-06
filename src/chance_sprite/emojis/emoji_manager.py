@@ -11,35 +11,32 @@ import discord
 log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
-class EmojiPacks:
+class EmojiPack:
     d6: list[str]
     d6_ex: list[str]
     edge: list[str]
-    glitch: str
-    critglitch: str
+    glitch: tuple[str, str, str]
 
 
-EMPTY_EMOJI_PACK: EmojiPacks = EmojiPacks(
+EMPTY_EMOJI_PACK: EmojiPack = EmojiPack(
     d6=[],
     d6_ex=[],
     edge=[],
-    glitch="",
-    critglitch=""
+    glitch=("", "", "")
 )
 
-RAW_TEXT_EMOJI_PACK: EmojiPacks = EmojiPacks(
+RAW_TEXT_EMOJI_PACK: EmojiPack = EmojiPack(
     d6=[str(n + 1) for n in range(6)],
     d6_ex=[str(n + 1) for n in range(6)],
-    edge=["reroll", "push", "higher"],
-    glitch="glitch",
-    critglitch="critglitch"
+    edge=["reroll", "push", "second_chance"],
+    glitch=("", "glitch", "critglitch")
 )
 
 class EmojiManager:
     def __init__(self, resource: str) -> None:
         self.resource = resource
         self.by_name: dict[str, discord.Emoji] = {}
-        self.packs: EmojiPacks = EMPTY_EMOJI_PACK
+        self.packs: EmojiPack = EMPTY_EMOJI_PACK
 
     @property
     def loaded(self) -> bool:
@@ -86,7 +83,7 @@ class EmojiManager:
         self.by_name = existing_by_name
         log.info("Emoji sync complete. Uploaded: %d. Total now: %d", uploaded, len(self.by_name))
 
-    def build_packs(self) -> EmojiPacks:
+    def build_packs(self) -> EmojiPack:
         if self.loaded:
             return self.packs
         """
@@ -103,13 +100,11 @@ class EmojiManager:
         d6_ex_names = ["d6r1", "d6r2", "d6r3", "d6r4", "d6r5", "d6r6ex"]
         edge_names = ["reroll"]
 
-        packs = EmojiPacks(
+        packs = EmojiPack(
             d6=[req(n) for n in d6_names],
             d6_ex=[req(n) for n in d6_ex_names],
             edge=[req(n) for n in edge_names],
-            glitch = req("glitch"),
-            critglitch = req("critglitch")
-
+            glitch=("", req("glitch"), req("critglitch")),
         )
         self.packs = packs
         return packs

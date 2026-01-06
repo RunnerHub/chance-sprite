@@ -4,18 +4,18 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Optional, Callable
 
-import discord
-from discord import app_commands
+from discord import app_commands, Interaction
 from discord import ui
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
+from chance_sprite.roller import roll_hits
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
-from ..sprite_context import SpriteContext
-from ..ui.commonui import build_header, RollAccessor
-from ..ui.edge_menu_persist import EdgeMenuButton
-from ..ui.generic_edge_menu import GenericEdgeMenu
+from ..rollui.commonui import build_header, RollAccessor
+from ..rollui.edge_menu_persist import EdgeMenuButton
+from ..rollui.generic_edge_menu import GenericEdgeMenu
+from ..sprite_context import ClientContext, InteractionContext
 
 
 @dataclass(frozen=True)
@@ -79,9 +79,9 @@ class SummonResult(RollRecordBase):
     ) -> SummonResult:
         lim = limit or force
 
-        summon = HitsResult.roll(int(summon_dice), limit=int(lim))
-        resist = HitsResult.roll(int(force))
-        drain = HitsResult.roll(int(drain_dice))
+        summon = roll_hits(int(summon_dice), limit=int(lim))
+        resist = roll_hits(int(force))
+        drain = roll_hits(int(drain_dice))
 
         return SummonResult(
             force=int(force),
@@ -91,9 +91,9 @@ class SummonResult(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str) -> Callable[[SpriteContext], ui.LayoutView]:
-        def _build(context: SpriteContext) -> ui.LayoutView:
-            container = build_header(EdgeMenuButton(context), label + f"\nForce {self.force}", self.result_color)
+    def build_view(self, label: str) -> Callable[[ClientContext], ui.LayoutView]:
+        def _build(context: ClientContext) -> ui.LayoutView:
+            container = build_header(EdgeMenuButton(), label + f"\nForce {self.force}", self.result_color)
 
             summon_line = "**Summoning:**\n" + self.summon.render_roll_with_glitch(
                 emoji_packs=context.emoji_manager.packs)
@@ -132,21 +132,20 @@ class SummonResult(RollRecordBase):
             return view
         return _build
 
-    @staticmethod
-    async def send_edge_menu(record: MessageRecord, context: SpriteContext, interaction: discord.Interaction):
+    @classmethod
+    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
         summon_accessor = RollAccessor[SummonResult](getter=lambda r: r.summon,
                                                      setter=lambda r, v: replace(r, summon=v))
-        await GenericEdgeMenu(f"Edge Summoning for {record.label}?", summon_accessor, record.message_id,
-                              context).send_as_followup(
-            interaction)
+        summon_menu = GenericEdgeMenu(f"Edge Summoning for {record.label}?", summon_accessor, record.message_id,
+                                      interaction)
+        await interaction.send_as_followup(summon_menu)
 
         drain_accessor = RollAccessor[SummonResult](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
-        await GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id,
-                              context).send_as_followup(interaction)
+        drain_menu = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, interaction)
+        await interaction.send_as_followup(drain_menu)
 
 
-
-def register(group: app_commands.Group, context: SpriteContext) -> None:
+def register(group: app_commands.Group) -> None:
     @group.command(name="summon", description="Summoning test vs spirit resistance + drain (SR5).")
     @app_commands.describe(
         label="A label to describe the roll (spirit type + task are a good start).",
@@ -156,14 +155,14 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
         limit="Optional limit override (defaults to Force).",
         drain_adjust="Optional adjustment to drain DV (additive; can be negative).",
     )
-    async def cmd(interaction: discord.Interaction,
-        label: str,
-        force: app_commands.Range[int, 1, 99],
-        summon_dice: app_commands.Range[int, 1, 99],
-        drain_dice: app_commands.Range[int, 1, 99],
-        limit: Optional[app_commands.Range[int, 1, 99]] = None,
-        drain_adjust: app_commands.Range[int, -99, 99] = 0,
-    ) -> None:
+    async def cmd(interaction: Interaction[ClientContext],
+                  label: str,
+                  force: app_commands.Range[int, 1, 99],
+                  summon_dice: app_commands.Range[int, 1, 99],
+                  drain_dice: app_commands.Range[int, 1, 99],
+                  limit: Optional[app_commands.Range[int, 1, 99]] = None,
+                  drain_adjust: app_commands.Range[int, -99, 99] = 0,
+                  ) -> None:
         result = SummonResult.roll(
             force=int(force),
             summon_dice=int(summon_dice),
@@ -171,6 +170,4 @@ def register(group: app_commands.Group, context: SpriteContext) -> None:
             limit=limit or 0,
             drain_adjust=int(drain_adjust),
         )
-        record = await context.transmit_result(label=label, result=result, interaction=interaction)
-
-        await result.send_edge_menu(record, context, interaction)
+        await InteractionContext(interaction).transmit_result(label=label, result=result)

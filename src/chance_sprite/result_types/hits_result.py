@@ -4,8 +4,8 @@ import random
 from dataclasses import dataclass, replace
 from typing import List
 
-from chance_sprite.emojis.emoji_manager import EmojiPacks
-from chance_sprite.result_types import Glitch
+from chance_sprite.emojis.emoji_manager import EmojiPack
+from . import Glitch
 from . import _default_random
 
 
@@ -16,6 +16,10 @@ class HitsResult:
     limit: int
     gremlins: int
     dice_adjustment: int = 0
+
+    @property
+    def limit_reached(self):
+        return 0 < self.limit <= self.dice_hits
 
     @property
     def dice(self):
@@ -45,12 +49,6 @@ class HitsResult:
             return self.dice_hits
 
     # === NEW ROLLS ===
-    @staticmethod
-    def roll(dice: int, *, limit: int = 0, gremlins: int = 0, rng: random.Random = _default_random) -> HitsResult:
-        rolls = [rng.randint(1, 6) for _ in range(dice)]
-        return HitsResult(original_dice=dice, rolls=rolls, limit=limit, gremlins=gremlins)
-
-
     def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
         new_dice_adjustment: int = max(self.dice_adjustment + adjustment, -self.original_dice)
         # Only roll new dice if the new adjustment exceeds the total number rolled
@@ -74,12 +72,12 @@ class HitsResult:
         else:
             return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
 
-    def render_roll(self, *, emoji_packs: EmojiPacks):
+    def render_roll(self, *, emoji_packs: EmojiPack):
         line = f"`{self.dice}d6:`" + self.render_dice(emoji_packs=emoji_packs)
         line += self.render_limited_hits()
         return line
 
-    def render_dice(self, *, emoji_packs: EmojiPacks) -> str:
+    def render_dice(self, *, emoji_packs: EmojiPack) -> str:
         emojis =  emoji_packs.d6
 
         if self.dice_adjustment < 0:
@@ -95,14 +93,14 @@ class HitsResult:
                 line += "-~~" + "".join(str(x) for x in self.rolls[self.dice:]) + "~~"
         return line
 
-    def render_glitch(self, *, emoji_packs: EmojiPacks):
+    def render_glitch(self, *, emoji_packs: EmojiPack):
         if self.glitch == Glitch.GLITCH:
             return "```diff\n-Glitch!```"
         if self.glitch == Glitch.CRITICAL:
             return "```diff\n-Critical Glitch!```"
         return ""
 
-    def render_roll_with_glitch(self, *, emoji_packs: EmojiPacks):
+    def render_roll_with_glitch(self, *, emoji_packs: EmojiPack):
         line = self.render_roll(emoji_packs=emoji_packs)
         line += self.render_glitch(emoji_packs=emoji_packs)
         return line
