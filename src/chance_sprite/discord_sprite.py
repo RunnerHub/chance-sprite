@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 
 from chance_sprite.emojis.emoji_manager import EmojiManager
-from chance_sprite.file_sprite import ConfigFile, RollRecordCacheFile
+from chance_sprite.file_sprite import ConfigFile, RollRecordCacheFile, DatabaseHandle, MessageRecordStore
 from chance_sprite.rollui.edge_menu_persist import EdgeMenuPersist
 from chance_sprite.sprite_context import ClientContext
 
@@ -23,15 +23,18 @@ EXTENSIONS: tuple[str, ...] = (
 class DiscordSprite(ClientContext):
     def __init__(self, *, enable_sync: bool = True) -> None:
         self.config = ConfigFile[str, Any]("config.json")
+        self.database = DatabaseHandle("chance_sprite.sqlite3")
         intents = discord.Intents.default()
         intents.guilds = True
         intents.guild_messages = True
         super().__init__(
             emoji_manager=EmojiManager("chance_sprite.emojis"),
-            message_cache=RollRecordCacheFile("message_cache.json"),
+            message_cache=MessageRecordStore(self.database),
             command_prefix=commands.when_mentioned,  # unused for slash-only; harmless
             intents=intents,
         )
+        old_cache_file = RollRecordCacheFile("message_cache.json")
+        old_cache_file.dump(self.message_cache)
         self.enable_global_sync = enable_sync
 
     async def setup_hook(self) -> None:

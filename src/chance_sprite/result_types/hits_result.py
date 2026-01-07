@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, replace
-from typing import List
 
-from chance_sprite.emojis.emoji_manager import EmojiPack
 from . import Glitch
 from . import _default_random
+from ..sprite_context import InteractionContext
 
 
 @dataclass(frozen=True, kw_only=True)
 class HitsResult:
     original_dice: int
-    rolls: List[int]
+    rolls: tuple[int]
     limit: int
     gremlins: int
     dice_adjustment: int = 0
@@ -72,13 +71,13 @@ class HitsResult:
         else:
             return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
 
-    def render_roll(self, *, emoji_packs: EmojiPack):
-        line = f"`{self.dice}d6:`" + self.render_dice(emoji_packs=emoji_packs)
+    def render_roll(self, context: InteractionContext):
+        line = f"`{self.dice}d6:`" + self.render_dice(context)
         line += self.render_limited_hits()
         return line
 
-    def render_dice(self, *, emoji_packs: EmojiPack) -> str:
-        emojis =  emoji_packs.d6
+    def render_dice(self, context: InteractionContext) -> str:
+        emojis = context.emoji_manager.packs.d6
 
         if self.dice_adjustment < 0:
             line = "".join(emojis[x - 1] for x in self.rolls[:self.dice])
@@ -93,14 +92,14 @@ class HitsResult:
                 line += "-~~" + "".join(str(x) for x in self.rolls[self.dice:]) + "~~"
         return line
 
-    def render_glitch(self, *, emoji_packs: EmojiPack):
+    def render_glitch(self, context: InteractionContext):
         if self.glitch == Glitch.GLITCH:
             return "```diff\n-Glitch!```"
         if self.glitch == Glitch.CRITICAL:
             return "```diff\n-Critical Glitch!```"
         return ""
 
-    def render_roll_with_glitch(self, *, emoji_packs: EmojiPack):
-        line = self.render_roll(emoji_packs=emoji_packs)
-        line += self.render_glitch(emoji_packs=emoji_packs)
+    def render_roll_with_glitch(self, context: InteractionContext):
+        line = self.render_roll(context)
+        line += self.render_glitch(context)
         return line

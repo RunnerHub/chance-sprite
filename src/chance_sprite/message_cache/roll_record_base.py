@@ -2,18 +2,18 @@ from __future__ import annotations
 
 from abc import abstractmethod, ABC
 from dataclasses import dataclass
-from typing import Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from discord import ui
 
 if TYPE_CHECKING:
-    from chance_sprite.sprite_context import ClientContext, InteractionContext
+    from chance_sprite.sprite_context import InteractionContext
 
 
 @dataclass(frozen=True, kw_only=True)
 class RollRecordBase(ABC):
     @abstractmethod
-    def build_view(self, label: str, context) -> Callable[[ClientContext], ui.LayoutView]:
+    def build_view(self, label: str, interaction: InteractionContext) -> ui.LayoutView:
         raise NotImplementedError
 
     @classmethod

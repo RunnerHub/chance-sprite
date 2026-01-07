@@ -154,4 +154,4 @@ async def test_roll_smoke_per_item(case: Case) -> None:
     if hasattr(roll, "build_view"):
         # noinspection PyInvalidCast
         context = cast(ClientContext, FakeContext())
-        builder = roll.build_view("Smoke", context)
+        roll.build_view("Smoke", context)

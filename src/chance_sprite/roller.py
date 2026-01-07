@@ -25,7 +25,7 @@ def roll_exploding(dice: int, *, limit: int = 0, gremlins: int = 0,
         sixes = sum(1 for r in rerolls if r == 6)
         if sixes == 0:
             break
-    return BreakTheLimitHitsResult(original_dice=dice, rolls=rolls, limit=limit, gremlins=gremlins,
+    return BreakTheLimitHitsResult(original_dice=dice, rolls=tuple(rolls), limit=limit, gremlins=gremlins,
                                    exploded_dice=exploded_dice)
 
 

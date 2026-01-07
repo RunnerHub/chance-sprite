@@ -20,17 +20,15 @@ from ..sprite_context import ClientContext, InteractionContext
 
 
 class SummonRollView(ui.LayoutView):
-    def __init__(self, roll_result: SummonRoll, label: str, *, context: ClientContext):
+    def __init__(self, roll_result: SummonRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
         container = build_header(EdgeMenuButton(), label + f"\nForce {roll_result.force}",
                                  self.result_color(roll_result))
 
-        summon_line = "**Summoning:**\n" + roll_result.summon.render_roll_with_glitch(
-            emoji_packs=context.emoji_manager.packs)
+        summon_line = "**Summoning:**\n" + roll_result.summon.render_roll_with_glitch(context)
         container.add_item(ui.TextDisplay(summon_line))
 
-        resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(
-            emoji_packs=context.emoji_manager.packs)
+        resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(context)
         container.add_item(ui.TextDisplay(resist_line))
 
         if roll_result.succeeded:
@@ -46,9 +44,9 @@ class SummonRollView(ui.LayoutView):
 
         drain_line = (
                 "**Drain Resistance:**\n"
-                + roll_result.drain.render_roll(emoji_packs=context.emoji_manager.packs)
+                + roll_result.drain.render_roll(context)
                 + f" vs. DV{roll_result.drain_value}{dv_note}"
-                + roll_result.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
+                + roll_result.drain.render_glitch(context)
         )
         container.add_item(ui.TextDisplay(drain_line))
 
@@ -131,8 +129,8 @@ class SummonRoll(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
-        return SummonRollView(self, label, context=context)
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return SummonRollView(self, label, context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

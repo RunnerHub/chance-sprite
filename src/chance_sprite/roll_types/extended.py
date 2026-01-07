@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 from discord import app_commands, Interaction
 from discord import ui
@@ -18,7 +18,7 @@ from ..sprite_context import ClientContext, InteractionContext
 
 
 class ExtendedRollView(ui.LayoutView):
-    def __init__(self, roll_result: ExtendedRoll, label: str, *, context: ClientContext):
+    def __init__(self, roll_result: ExtendedRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
         accent = 0x88FF88 if roll_result.succeeded else 0xFF8888
         menu_button = EdgeMenuButton()
@@ -37,7 +37,7 @@ class ExtendedRollView(ui.LayoutView):
         prev = 0
         for it in roll_result.iterations:
             blocks.append(
-                f"`{it.roll.dice}d6` {it.roll.render_dice(emoji_packs=context.emoji_manager.packs)} [{prev}+**{it.roll.hits_limited}**=**{it.cumulative_hits}**]"
+                f"`{it.roll.dice}d6` {it.roll.render_dice(context)} [{prev}+**{it.roll.hits_limited}**=**{it.cumulative_hits}**]"
             )
             prev = it.cumulative_hits
 
@@ -76,7 +76,7 @@ class ExtendedRoll(RollRecordBase):
     start_dice: int
     threshold: int
     max_iters: int
-    iterations: List[ExtendedIteration]
+    iterations: tuple[ExtendedIteration, ...]
     succeeded: bool
     final_hits: int
     iters_used: int
@@ -85,7 +85,7 @@ class ExtendedRoll(RollRecordBase):
 
     @staticmethod
     def roll(dice: int, threshold: int, max_iters: int, limit: int, gremlins: int) -> ExtendedRoll:
-        iterations: List[ExtendedIteration] = []
+        iterations: list[ExtendedIteration] = []
         cumulative = 0
         iters_used = 0
 
@@ -106,7 +106,7 @@ class ExtendedRoll(RollRecordBase):
             start_dice=dice,
             threshold=threshold,
             max_iters=max_iters,
-            iterations=iterations,
+            iterations=tuple(iterations),
             succeeded=(cumulative >= threshold),
             final_hits=cumulative,
             iters_used=iters_used,
@@ -114,8 +114,8 @@ class ExtendedRoll(RollRecordBase):
             gremlins=gremlins
         )
 
-    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
-        return ExtendedRollView(self, label, context=context)
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return ExtendedRollView(self, label, context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):

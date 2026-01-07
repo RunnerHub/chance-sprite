@@ -4,16 +4,16 @@ import random
 from dataclasses import dataclass, replace
 from functools import cached_property
 from itertools import zip_longest
-from typing import List, Iterable
+from typing import Iterable
 
-from chance_sprite.emojis.emoji_manager import EmojiPack
 from chance_sprite.result_types.hits_result import HitsResult
 from . import _default_random, Glitch
+from ..sprite_context import InteractionContext
 
 
 @dataclass(frozen=True, kw_only=True)
 class BreakTheLimitHitsResult(HitsResult):
-    exploded_dice: List[List[int]]
+    exploded_dice: tuple[tuple[int]]
 
     @cached_property
     def base_sixes(self):
@@ -67,9 +67,9 @@ class BreakTheLimitHitsResult(HitsResult):
         else:
             return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
 
-    def render_roll(self, *, emoji_packs: EmojiPack):
-        line = super().render_roll(emoji_packs=emoji_packs)
-        emojis = emoji_packs.d6_ex
+    def render_roll(self, context: InteractionContext):
+        line = super().render_roll(context)
+        emojis = context.emoji_manager.packs.d6_ex
         for roll in self.exploded_dice:
             line += f"\n`explode:`" + "".join(emojis[x - 1] for x in roll) + f"**{sum(1 for r in roll if r in (5, 6))}** hits"
         line += f"\n**{self.hits_limited}** Total Hits"

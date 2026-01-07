@@ -20,14 +20,14 @@ from ..sprite_context import ClientContext, InteractionContext
 
 
 class SpellRollView(ui.LayoutView):
-    def __init__(self, roll_result: SpellRoll, label: str, *, context: ClientContext):
+    def __init__(self, roll_result: SpellRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
         container = build_header(EdgeMenuButton(), label + f"\nForce {roll_result.force}", roll_result.result_color)
 
         # Spellcasting line: show raw hits and limited hits
         cast_line = (
                 f"**Spellcasting:**\n"
-                + roll_result.cast.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)
+                + roll_result.cast.render_roll_with_glitch(context)
         )
         container.add_item(ui.TextDisplay(cast_line))
         container.add_item(ui.Separator())
@@ -35,9 +35,8 @@ class SpellRollView(ui.LayoutView):
         # Drain line: threshold-style
         drain_line = (
                 f"**Drain:** \n"
-                + roll_result.drain.render_roll(
-            emoji_packs=context.emoji_manager.packs) + f" vs. DV{roll_result.drain_value}"
-                + roll_result.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
+                + roll_result.drain.render_roll(context) + f" vs. DV{roll_result.drain_value}"
+                + roll_result.drain.render_glitch(context)
         )
         container.add_item(ui.TextDisplay(drain_line))
 
@@ -122,8 +121,8 @@ class SpellRoll(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
-        return SpellRollView(self, label, context=context)
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return SpellRollView(self, label, context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

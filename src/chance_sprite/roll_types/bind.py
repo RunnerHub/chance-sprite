@@ -19,18 +19,18 @@ from ..sprite_context import ClientContext, InteractionContext
 
 
 class BindingRollView(ui.LayoutView):
-    def __init__(self, roll_result: BindingRoll, label: str, *, context: ClientContext):
+    def __init__(self, roll_result: BindingRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
         menu_button = EdgeMenuButton()
         container = build_header(menu_button,
                                  label + f"\nForce {roll_result.force} | **Binding Cost:** {roll_result.bind_cost} reagents, 1 service",
                                  roll_result.result_color)
 
-        bind_line = "**Binding:**\n" + roll_result.bind.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)
+        bind_line = "**Binding:**\n" + roll_result.bind.render_roll_with_glitch(context)
         container.add_item(ui.TextDisplay(bind_line))
 
         resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(
-            emoji_packs=context.emoji_manager.packs)
+            context)
         container.add_item(ui.TextDisplay(resist_line))
 
         services_changed = f"Services: **{roll_result.services_in} → {roll_result.services_out}**"
@@ -47,9 +47,9 @@ class BindingRollView(ui.LayoutView):
 
         drain_line = (
                 "**Drain Resistance:**\n"
-                + roll_result.drain.render_roll(emoji_packs=context.emoji_manager.packs)
+                + roll_result.drain.render_roll(context)
                 + f" vs. DV{roll_result.drain_value}{dv_note}"
-                + roll_result.drain.render_glitch(emoji_packs=context.emoji_manager.packs)
+                + roll_result.drain.render_glitch(context)
         )
         container.add_item(ui.TextDisplay(drain_line))
 
@@ -145,8 +145,8 @@ class BindingRoll(RollRecordBase):
             drain=drain,
         )
 
-    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
-        return BindingRollView(self, label, context=context)
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return BindingRollView(self, label, context)
 
     @classmethod
     async def send_edge_menu(cls, record: type[Self], interaction: InteractionContext):

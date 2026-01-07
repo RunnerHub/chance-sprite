@@ -21,13 +21,13 @@ log = logging.getLogger(__name__)
 
 
 class SimpleResultView(ui.LayoutView):
-    def __init__(self, roll_result: SimpleRoll, label: str, *, sprite_context: ClientContext):
+    def __init__(self, roll_result: SimpleRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
         self.roll_result = roll_result
         self.label = label
-        self.sprite_context = sprite_context
+        self.context = context
         container = build_header(EdgeMenuButton(), self.label, 0x8888FF)
-        dice = self.roll_result.result.render_roll_with_glitch(emoji_packs=self.sprite_context.emoji_manager.packs)
+        dice = self.roll_result.result.render_roll_with_glitch(context)
         dice_section = ui.TextDisplay(dice)
         container.add_item(dice_section)
         self.add_item(container)
@@ -46,8 +46,8 @@ class SimpleRoll(RollRecordBase):
         else:
             return SimpleRoll(result=roll_hits(dice=dice, limit=limit, gremlins=gremlins))
 
-    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
-        return SimpleResultView(self, label, sprite_context=context)
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return SimpleResultView(self, label, context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

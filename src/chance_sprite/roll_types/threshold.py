@@ -20,21 +20,21 @@ from ..sprite_context import ClientContext, InteractionContext
 
 
 class ThresholdView(ui.LayoutView):
-    def __init__(self, roll: ThresholdRoll, label: str, context: ClientContext):
+    def __init__(self, roll_result: ThresholdRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
-        container = build_header(EdgeMenuButton(), label, roll.result_color)
+        container = build_header(EdgeMenuButton(), label, roll_result.result_color)
 
-        dice = roll.result.render_roll(emoji_packs=context.emoji_manager.packs)
-        if roll.threshold:
-            dice += f" vs ({roll.threshold})"
-        glitch = roll.result.render_glitch(emoji_packs=context.emoji_manager.packs)
+        dice = roll_result.result.render_roll(context)
+        if roll_result.threshold:
+            dice += f" vs ({roll_result.threshold})"
+        glitch = roll_result.result.render_glitch(context)
         if glitch:
             dice += "\n" + glitch
         container.add_item(ui.TextDisplay(dice))
 
-        if roll.threshold > 0:
-            outcome = "Succeeded!" if roll.succeeded else "Failed!"
-            container.add_item(ui.TextDisplay(f"**{outcome}** ({roll.net_hits:+d} net)"))
+        if roll_result.threshold > 0:
+            outcome = "Succeeded!" if roll_result.succeeded else "Failed!"
+            container.add_item(ui.TextDisplay(f"**{outcome}** ({roll_result.net_hits:+d} net)"))
 
         self.add_item(container)
 
@@ -77,7 +77,7 @@ class ThresholdRoll(RollRecordBase):
             color = 0xCC44CC if succ else 0xCC4444
         return color
 
-    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
         return ThresholdView(self, label, context)
 
     @classmethod

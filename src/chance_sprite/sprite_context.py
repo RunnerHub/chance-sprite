@@ -17,20 +17,19 @@ log = logging.getLogger(__name__)
 
 
 class ClientContext(commands.Bot):
-    emoji_manager: EmojiManager
-    message_cache: RollRecordCacheFile
-    message_handles: dict[int, InteractionMessage]
-
     def __init__(self, *, emoji_manager: EmojiManager, message_cache: RollRecordCacheFile, **kwargs):
         super().__init__(**kwargs)
-        self.emoji_manager = emoji_manager
-        self.message_cache = message_cache
-        self.message_handles = dict()
+        self.emoji_manager: EmojiManager = emoji_manager
+        self.message_cache: RollRecordCacheFile = message_cache
+        self.message_handles: dict[int, InteractionMessage] = dict()
 
 
 class InteractionContext:
     def __init__(self, interaction: Interaction[ClientContext]):
         self.interaction = interaction
+        self.emoji_manager = interaction.client.emoji_manager
+        self.message_cache = interaction.client.message_cache
+        self.message_handles = dict()
 
     def get_cached_record(self, message_id: int):
         return self.interaction.client.message_cache[message_id]
@@ -42,7 +41,7 @@ class InteractionContext:
         await self.defer_if_needed()
         interaction = self.interaction
         context = interaction.client
-        view = new_result.build_view(old_record.label, context)
+        view = new_result.build_view(old_record.label, self)
         # emojis = interaction.client.emoji_manager.packs
         # TODO: await emoji sync and update
         # if not context.emoji_manager.loaded:
@@ -73,8 +72,7 @@ class InteractionContext:
         # TODO: await emoji sync and update
         # if not context.emoji_manager.loaded:
         #     pass
-        view_builder = result.build_view(label, context)
-        primary_view = view_builder(context)
+        primary_view = result.build_view(label, self)
         send_message_response: InteractionCallbackResponse[ClientContext] = await interaction.response.send_message(
             view=primary_view, )
         message_id = send_message_response.message_id

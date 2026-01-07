@@ -2,16 +2,15 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, replace
-from typing import List
 
-from chance_sprite.emojis.emoji_manager import EmojiPack
 from chance_sprite.result_types.hits_result import HitsResult
 from . import _default_random
+from ..sprite_context import InteractionContext
 
 
 @dataclass(frozen=True, kw_only=True)
 class SecondChanceHitsResult(HitsResult):
-    rerolled_dice: List[int]
+    rerolled_dice: tuple[int]
     rerolled_hits: int
 
     @property
@@ -32,13 +31,13 @@ class SecondChanceHitsResult(HitsResult):
         else:
             return f" **{total_hits}** hit{'' if total_hits == 1 else 's'}"
 
-    def render_roll(self, *, emoji_packs: EmojiPack):
-        line = super().render_roll(emoji_packs=emoji_packs)
-        line += f"\n`>edge:`" + self.render_rerolls(emoji_packs=emoji_packs) + self.render_limited_rerolled_hits()
+    def render_roll(self, context: InteractionContext):
+        line = super().render_roll(context)
+        line += f"\n`>edge:`" + self.render_rerolls(context) + self.render_limited_rerolled_hits()
         return line
 
-    def render_rerolls(self, *, emoji_packs: EmojiPack) -> str:
-        emojis = emoji_packs.d6
+    def render_rerolls(self, context: InteractionContext) -> str:
+        emojis = context.emoji_manager.packs.d6
         n_original_hits = sum(1 for r in self.rolls[:self.original_dice] if r in (5, 6))
         n_original_rerolls = self.original_dice - n_original_hits
         n_current_rerolls = self.dice - self.dice_hits

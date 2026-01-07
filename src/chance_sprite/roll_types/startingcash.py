@@ -18,13 +18,13 @@ from ..sprite_context import ClientContext, InteractionContext
 
 
 class StartingCashRollView(ui.LayoutView):
-    def __init__(self, roll_result: StartingCashRoll, label: str, *, context: ClientContext):
+    def __init__(self, roll_result: StartingCashRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
         container = build_header(EdgeMenuButton(),
                                  f"{roll_result.lifestyle.label} lifestyle starting cash\n{label}",
                                  roll_result.lifestyle.color)
 
-        dice = roll_result.result.render_dice(emoji_packs=context.emoji_manager.packs)
+        dice = roll_result.result.render_dice(context)
         total = roll_result.result.total_roll
         nuyen = roll_result.result.total_roll * roll_result.lifestyle.mult
         dice_line = f"`{roll_result.result.dice}d6`{dice} Total: **{total}** × {roll_result.lifestyle.mult}¥"
@@ -77,8 +77,8 @@ class StartingCashRoll(RollRecordBase):
     def roll(lifestyle: LifestyleStartingCash) -> StartingCashRoll:
         return StartingCashRoll(result=additive_roll(lifestyle.dice), lifestyle=lifestyle)
 
-    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
-        return StartingCashRollView(self, label, context=context)
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return StartingCashRollView(self, label, context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

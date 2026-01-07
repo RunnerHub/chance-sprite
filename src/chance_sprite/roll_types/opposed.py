@@ -18,30 +18,35 @@ from ..rollui.generic_edge_menu import GenericEdgeMenu
 from ..sprite_context import ClientContext, InteractionContext
 
 
+def _decide_color(roll_result: OpposedRoll):
+    # Color by outcome
+    net = roll_result.net_hits
+    if net > 0:
+        accent = 0x88FF88
+    elif net < 0:
+        accent = 0xFF8888
+    else:
+        accent = 0x8888FF
+    return accent
+
+
 class OpposedRollView(ui.LayoutView):
-    def __init__(self, roll_result: OpposedRoll, label: str, *, context: ClientContext):
+    def __init__(self, roll_result: OpposedRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
-        # Color by outcome
-        net = roll_result.net_hits
-        if net > 0:
-            accent = 0x88FF88
-        elif net < 0:
-            accent = 0xFF8888
-        else:
-            accent = 0x8888FF
 
         menu_button = EdgeMenuButton()
-        container = build_header(menu_button, label, accent)
+        container = build_header(menu_button, label, _decide_color(roll_result))
 
         # Initiator block
         container.add_item(ui.TextDisplay(
-            f"**Initiator:**\n{roll_result.initiator.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)}"))
+            f"**Initiator:**\n{roll_result.initiator.render_roll_with_glitch(context)}"))
 
         container.add_item(ui.Separator())
         # Defender block
         container.add_item(ui.TextDisplay(
-            f"**Defender:**\n{roll_result.defender.render_roll_with_glitch(emoji_packs=context.emoji_manager.packs)}"))
+            f"**Defender:**\n{roll_result.defender.render_roll_with_glitch(context)}"))
 
+        net = roll_result.net_hits
         # Outcome
         container.add_item(ui.Separator())
         if net == 0:
@@ -77,8 +82,8 @@ class OpposedRoll(RollRecordBase):
         defender = roll_hits(defender_dice, limit=defender_limit, gremlins=defender_gremlins)
         return OpposedRoll(initiator=initiator, defender=defender)
 
-    def build_view(self, label: str, context: ClientContext) -> ui.LayoutView:
-        return OpposedRollView(self, label, context=context)
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return OpposedRollView(self, label, context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):

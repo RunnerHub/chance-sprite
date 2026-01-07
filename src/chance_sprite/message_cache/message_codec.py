@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+import sys
 from dataclasses import is_dataclass, fields
 from types import ModuleType
 from typing import Any, get_origin, get_args, get_type_hints
@@ -10,10 +11,13 @@ from typing import Any, get_origin, get_args, get_type_hints
 class MessageCodec:
     def __init__(self):
         self.registry = {}
-        self._hint_cache: dict[type, dict[str, Any]] = {}  # type: ignore[annotation-unchecked]
+        self._hint_cache: dict[type, dict[str, Any]] = {}
+
+    def build_registry_default(self):
+        from .. import result_types, roll_types, message_cache, rollui, emojis
+        self.build_registry([result_types, roll_types, message_cache, rollui, emojis])
 
     def build_registry(self, packages: list[ModuleType]):
-
         for pkg in packages:
             for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
                 if m.ispkg:
@@ -34,30 +38,28 @@ class MessageCodec:
             self.registry[tag] = cls
             setattr(cls, "__tag__", tag)
             return cls
-
         return deco
 
     def alias(self, tag: str):
         def deco(cls: type):
             self.registry[tag] = cls
             return cls
-
         return deco
 
-    def decode_with_hint(self, v, hint):
+    def decode_with_hint(self, value, hint):
         # If it's a tagged dict, dispatch regardless of hint
-        if isinstance(v, dict) and "type" in v:
-            return self.decode(v)
+        if isinstance(value, dict) and "type" in value:
+            return self.dataclass_from_dict(value)
 
         # Recurse containers
-        if isinstance(v, list):
+        if isinstance(value, list):
             # try to use list[T] hint if present
             if get_origin(hint) is list:
                 (item_t,) = get_args(hint) or (Any,)
-                return [self.decode_with_hint(x, item_t) for x in v]
-            return [self.decode(x) if isinstance(x, dict) else x for x in v]
+                return [self.decode_with_hint(x, item_t) for x in value]
+            return [self.decode_with_hint(x, Any) for x in value]
 
-        if isinstance(v, dict):
+        if isinstance(value, dict):
             # If we have dict[K, V] type info, use it
             if get_origin(hint) is dict:
                 key_t, val_t = get_args(hint) or (Any, Any)
@@ -74,15 +76,16 @@ class MessageCodec:
 
                 return {
                     coerce_key(k): self.decode_with_hint(val, val_t)
-                    for k, val in v.items()
+                    for k, val in value.items()
                 }
 
             # No hint: do NOT coerce keys; just recurse values
-            return {k: self.decode_with_hint(val, Any) for k, val in v.items()}
+            return {k: self.decode_with_hint(val, Any) for k, val in value.items()}
 
-        return v
+        return value
 
-    def decode(self, obj: Any) -> Any:
+    def dataclass_from_dict(self, obj: Any) -> Any:
+        # Don't guess at objects without type parameters
         if not (isinstance(obj, dict) and "type" in obj):
             return obj
 
@@ -96,12 +99,14 @@ class MessageCodec:
 
         # Resolve postponed annotations (and forward refs) to real types
         type_hints = self._hint_cache.get(cls)
-
         if type_hints is None:
-            # try:
-            type_hints = get_type_hints(cls)
-            # except NameError:
-            #     type_hints = getattr(cls, "__annotations__", {})
+            globalns = vars(sys.modules[cls.__module__])
+            localns = dict(vars(cls))  # Class locals + type parameters (PEP 695)
+            type_params = getattr(cls, "__type_params__", ())
+            for tp in type_params:
+                # tp is a TypeVar-like object with a __name__
+                localns[getattr(tp, "__name__", str(tp))] = tp
+            type_hints = get_type_hints(cls, globalns=globalns, localns=localns)
             self._hint_cache[cls] = type_hints
 
         kwargs = {}
@@ -111,15 +116,15 @@ class MessageCodec:
                 kwargs[f.name] = self.decode_with_hint(obj[f.name], hint)
         return cls(**kwargs)
 
-    def encode(self, obj: Any) -> Any:
-        tag = getattr(obj.__class__, "__tag__", obj.__class__.__name__)
+    def dict_from_dataclass(self, obj: Any) -> Any:
         if is_dataclass(obj):
-            out = {"type": tag}
+            type_tag = getattr(obj.__class__, "__tag__", obj.__class__.__name__)
+            out = {"type": type_tag}
             for f in fields(obj):
-                out[f.name] = self.encode(getattr(obj, f.name))
+                out[f.name] = self.dict_from_dataclass(getattr(obj, f.name))
             return out
         if isinstance(obj, list):
-            return [self.encode(x) for x in obj]
+            return [self.dict_from_dataclass(x) for x in obj]
         if isinstance(obj, dict):
-            return {k: self.encode(v) for k, v in obj.items()}
+            return {k: self.dict_from_dataclass(v) for k, v in obj.items()}
         return obj
