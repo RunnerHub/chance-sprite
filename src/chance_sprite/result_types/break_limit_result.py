@@ -13,7 +13,7 @@ from ..sprite_context import InteractionContext
 
 @dataclass(frozen=True, kw_only=True)
 class BreakTheLimitHitsResult(HitsResult):
-    exploded_dice: tuple[tuple[int]]
+    exploded_dice: tuple[tuple[int, ...], ...]
 
     @cached_property
     def base_sixes(self):
@@ -80,20 +80,20 @@ class BreakTheLimitHitsResult(HitsResult):
         # Only roll new dice if the new adjustment exceeds the total number rolled
         new_dice_to_roll = self.original_dice + new_dice_adjustment - len(self.rolls)
         new_rolls = self.rolls
-        new_exploded_dice: list[list[int]] = self.exploded_dice
+        new_exploded_dice: tuple[tuple[int, ...], ...] = self.exploded_dice
         if new_dice_to_roll > 0:
             additional_rolls = [rng.randint(1, 6) for _ in range(new_dice_to_roll)]
-            additional_explosions: list[list[int]] = []
+            additional_explosions: list[tuple[int, ...]] = []
             additional_sixes = sum(1 for r in additional_rolls if r == 6)
             while True:
-                rerolls = [rng.randint(1, 6) for _ in range(additional_sixes)]
+                rerolls = tuple(rng.randint(1, 6) for _ in range(additional_sixes))
                 additional_explosions.append(rerolls)
                 sixes = sum(1 for r in rerolls if r == 6)
                 if sixes == 0:
                     break
-            pairs: Iterable[tuple[list[int], list[int]]] = zip_longest(
+            pairs: Iterable[tuple[tuple[int, ...], tuple[int, ...]]] = zip_longest(
                 new_exploded_dice, additional_explosions, fillvalue=[]
             )
-            new_exploded_dice = [a + b for a, b in pairs]
-            new_rolls = self.rolls + additional_rolls
+            new_exploded_dice = tuple(a + b for a, b in pairs)
+            new_rolls = self.rolls + tuple(additional_rolls)
         return replace(self, rolls=new_rolls, dice_adjustment=new_dice_adjustment, exploded_dice=new_exploded_dice)

@@ -11,7 +11,7 @@ from ..sprite_context import InteractionContext
 @dataclass(frozen=True, kw_only=True)
 class HitsResult:
     original_dice: int
-    rolls: tuple[int]
+    rolls: tuple[int, ...]
     limit: int
     gremlins: int
     dice_adjustment: int = 0
@@ -54,7 +54,7 @@ class HitsResult:
         new_dice_to_roll = self.original_dice + new_dice_adjustment - len(self.rolls)
         new_rolls = self.rolls
         if new_dice_to_roll > 0:
-            additional_rolls = [rng.randint(1, 6) for _ in range(new_dice_to_roll)]
+            additional_rolls = tuple(rng.randint(1, 6) for _ in range(new_dice_to_roll))
             new_rolls = self.rolls + additional_rolls
         return replace(self, rolls=new_rolls, dice_adjustment=new_dice_adjustment)
 

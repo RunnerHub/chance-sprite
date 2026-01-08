@@ -4,13 +4,15 @@ from __future__ import annotations
 import logging
 
 from discord import app_commands
-from discord.ext import commands
+
+from chance_sprite.sprite_context import ClientContext
 
 log = logging.getLogger(__name__)
 
 
-async def setup(bot: commands.Bot) -> None:
-    group = app_commands.Group(name="rolld6", description="SR5 d6 dice rolling tools.")
+async def setup(bot: ClientContext) -> None:
+    base_command_name = bot.base_command_name
+    group = app_commands.Group(name=base_command_name, description="SR5 d6 dice rolling tools.")
     app_commands.allowed_installs(guilds=True, users=True)(group)
     app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)(group)
 

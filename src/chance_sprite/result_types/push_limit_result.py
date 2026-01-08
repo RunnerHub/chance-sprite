@@ -8,7 +8,7 @@ from chance_sprite.sprite_context import InteractionContext
 
 @dataclass(frozen=True, kw_only=True)
 class PushTheLimitHitsResult(HitsResult):
-    exploded_dice: tuple[tuple[int]]
+    exploded_dice: tuple[tuple[int, ...], ...]
     rerolled_hits: int
 
     @property

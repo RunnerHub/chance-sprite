@@ -9,7 +9,7 @@ from discord.ext import commands
 from discord.ui.view import LayoutView
 
 from chance_sprite.emojis.emoji_manager import EmojiManager
-from chance_sprite.file_sprite import RollRecordCacheFile
+from chance_sprite.file_sprite import MessageRecordStore
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import RollRecordBase
 
@@ -17,11 +17,12 @@ log = logging.getLogger(__name__)
 
 
 class ClientContext(commands.Bot):
-    def __init__(self, *, emoji_manager: EmojiManager, message_cache: RollRecordCacheFile, **kwargs):
+    def __init__(self, *, emoji_manager: EmojiManager, message_cache: MessageRecordStore, **kwargs):
         super().__init__(**kwargs)
         self.emoji_manager: EmojiManager = emoji_manager
-        self.message_cache: RollRecordCacheFile = message_cache
+        self.message_cache: MessageRecordStore = message_cache
         self.message_handles: dict[int, InteractionMessage] = dict()
+        self.base_command_name = None
 
 
 class InteractionContext:

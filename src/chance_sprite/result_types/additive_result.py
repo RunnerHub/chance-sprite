@@ -8,7 +8,7 @@ from chance_sprite.sprite_context import InteractionContext
 @dataclass(frozen=True, kw_only=True)
 class AdditiveResult:
     dice: int
-    rolls: tuple[int]
+    rolls: tuple[int, ...]
 
     @property
     def total_roll(self):

@@ -36,9 +36,15 @@ class DiscordSprite(ClientContext):
         old_cache_file = RollRecordCacheFile("message_cache.json")
         old_cache_file.dump(self.message_cache)
         self.enable_global_sync = enable_sync
+        self.base_command_name = self.config["command_name"]
 
     async def setup_hook(self) -> None:
         self.add_view(EdgeMenuPersist())
+        log.info(f"Global sync: {self.enable_global_sync}")
+
+        if not self.enable_global_sync:
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync()
 
         # Load cogs/extensions
         for ext in EXTENSIONS:
@@ -48,21 +54,30 @@ class DiscordSprite(ClientContext):
         if self.enable_global_sync:
             await self.tree.sync()
 
-        # Undo guild sync
+        # Fast sync (for testing mainly, causes double command registration if command name matches)
         log.info("Trying fast sync")
-        for guild_id in self.config["fastpush_guilds"]:
-            try:
-                log.info(f"Fast syncing {guild_id}...")
-                guild = discord.Object(id=guild_id)
-                # self.tree.copy_global_to(guild=guild)
-                self.tree.clear_commands(guild=guild)
-                await self.tree.sync(guild=guild)
-                log.info(f"done.")
-            except Exception as e:
-                log.info(f"errored: {e}")
+        guilds = self.config["fastpush_guilds"] if "fastpush_guilds" in self.config else None
+        if guilds:
+            for guild_id in self.config["fastpush_guilds"]:
+                try:
+                    log.info(f"Fast syncing {guild_id}...")
+                    guild = discord.Object(id=guild_id)
+                    self.tree.copy_global_to(guild=guild)
+                    # self.tree.clear_commands(guild=guild)
+                    await self.tree.sync(guild=guild)
+                    log.info(f"done.")
+                except Exception as e:
+                    log.info(f"errored: %s", e)
 
     async def on_ready(self) -> None:
         if self.user:
             print(f"Logged in as {self.user} (id={self.user.id})")
         await self.emoji_manager.sync_application_emojis(self)
         self.emoji_manager.build_packs()
+        try:
+            username = self.config["username"]
+            if self.user.name != username:
+                log.info(f"attempting to change username from {self.user.name} to {username}")
+                await self.user.edit(username=username)
+        except Exception as e:
+            log.info(f"caught exception: %s", e)

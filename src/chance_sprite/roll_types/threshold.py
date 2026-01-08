@@ -39,11 +39,12 @@ class ThresholdView(ui.LayoutView):
         self.add_item(container)
 
 
+@message_codec.alias("SimpleRoll")
 @message_codec.alias("ThresholdResult")
 @dataclass(frozen=True)
 class ThresholdRoll(RollRecordBase):
     result: HitsResult
-    threshold: int
+    threshold: int = 0
 
     @property
     def succeeded(self) -> Optional[bool]:
@@ -89,7 +90,7 @@ class ThresholdRoll(RollRecordBase):
 
 
 def register(group: app_commands.Group) -> None:
-    @group.command(name="threshold", description="Roll some d6s, Shadowrun-style.")
+    @group.command(name="simple", description="Roll some d6s, Shadowrun-style.")
     @app_commands.describe(
         label="A label to describe the roll.",
         dice="Number of dice (1-99).",

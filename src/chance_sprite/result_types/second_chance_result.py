@@ -10,7 +10,7 @@ from ..sprite_context import InteractionContext
 
 @dataclass(frozen=True, kw_only=True)
 class SecondChanceHitsResult(HitsResult):
-    rerolled_dice: tuple[int]
+    rerolled_dice: tuple[int, ...]
     rerolled_hits: int
 
     @property
@@ -58,7 +58,7 @@ class SecondChanceHitsResult(HitsResult):
     def adjust_dice(self, adjustment: int, rng: random.Random = _default_random):
         replacement_base = super().adjust_dice(adjustment, rng)
         added_dice_amount = replacement_base.dice - replacement_base.dice_hits - len(self.rerolled_dice)
-        added_rerolls = [rng.randint(1, 6) for _ in range(added_dice_amount)]
+        added_rerolls = tuple(rng.randint(1, 6) for _ in range(added_dice_amount))
         new_rerolled_dice = self.rerolled_dice + added_rerolls
         new_rerolled_hits = sum(
             1 for r in new_rerolled_dice[0:replacement_base.dice - replacement_base.dice_hits] if r in (5, 6))
