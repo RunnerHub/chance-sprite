@@ -3,20 +3,21 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
-from typing import Optional, Self
+from typing import Optional, Self, Annotated
 
-from discord import ui, app_commands, Interaction
+from discord import ui, app_commands
 
+from chance_sprite.fungen import Desc
+from chance_sprite.fungen import roll_command
 from chance_sprite.message_cache import message_codec
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import RollRecordBase
 from chance_sprite.result_types import Glitch, HitsResult
-from chance_sprite.roller import roll_hits
-from chance_sprite.rollui.autocomplete import build_args_autocomplete_suggestions, ArgSpec
+from chance_sprite.roller import roll_hits, roll_exploding
 from chance_sprite.rollui.commonui import build_header, RollAccessor
 from chance_sprite.rollui.edge_menu_persist import EdgeMenuButton
 from chance_sprite.rollui.generic_edge_menu import GenericEdgeMenu
-from chance_sprite.sprite_context import InteractionContext, ClientContext
+from chance_sprite.sprite_context import InteractionContext
 
 log = logging.getLogger(__name__)
 
@@ -216,17 +217,12 @@ class SummonRollView(ui.LayoutView):
 class AlchemyCreateRoll(RollRecordBase):
     # Inputs
     force: int
-    limit: int
     drain_value: int
 
     # Rolls
     cast: HitsResult
     resist: HitsResult
     drain: HitsResult
-
-    @property
-    def cast_hits_limited(self) -> int:
-        return min(self.cast.hits_limited, max(self.limit, 1))
 
     @property
     def drain_succeeded(self) -> Optional[bool]:
@@ -245,32 +241,6 @@ class AlchemyCreateRoll(RollRecordBase):
     def potency(self):
         return max(self.cast.hits_limited - self.resist.hits_limited, 0)
 
-    @staticmethod
-    def roll(
-            *,
-            force: int,
-            cast_dice: int,
-            drain_value: int,
-            drain_dice: int,
-            limit: Optional[int] = None,
-    ) -> AlchemyCreateRoll:
-        lim = force if limit is None else limit
-
-        cast = roll_hits(cast_dice, limit=limit or 0)
-
-        resist = roll_hits(force)
-
-        drain = roll_hits(drain_dice)
-
-        return AlchemyCreateRoll(
-            force=force,
-            limit=lim,
-            drain_value=drain_value,
-            cast=cast,
-            resist=resist,
-            drain=drain,
-        )
-
     def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
         return AlchemyCreateRollView(self, label, context)
 
@@ -285,6 +255,34 @@ class AlchemyCreateRoll(RollRecordBase):
                                                          setter=lambda r, v: replace(r, drain=v))
         menu2 = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, interaction)
         await interaction.send_as_followup(menu2)
+
+
+@roll_command(desc="Roll to create an alchemical preparation.")
+def roll_alchemy(
+        *,
+        force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the alchemical preparation attempt.")],
+        alchemy_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for alchemy.")],
+        drain_code: Annotated[
+            app_commands.Range[int, -50, 50], Desc("Drain value modifier, relative to Force. e.g. `-3`")],
+        drain_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
+        limit_override: Annotated[
+            Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit override (defaults to Force).")] = None,
+        pre_edge: Annotated[bool, Desc("Pre-edge the test to create a preparation.")] = False,
+) -> AlchemyCreateRoll:
+    if pre_edge:
+        cast = roll_exploding(alchemy_dice)
+    else:
+        cast = roll_hits(alchemy_dice, limit=limit_override or force)
+    resist = roll_hits(force)
+    drain = roll_hits(drain_dice)
+
+    return AlchemyCreateRoll(
+        force=force,
+        drain_value=force + drain_code,
+        cast=cast,
+        resist=resist,
+        drain=drain,
+    )
 
 
 @message_codec.alias("BindResult")
@@ -346,31 +344,6 @@ class BindingRoll(RollRecordBase):
             return 0x88FF88
         return 0xFF8888 if self.drain_taken > 0 else 0xFFAA66
 
-    @staticmethod
-    def roll(
-            *,
-            force: int,
-            bind_dice: int,
-            drain_dice: int,
-            services_in: int,
-            limit: Optional[int] = None,
-            drain_adjust: int = 0,
-    ) -> BindingRoll:
-        lim = limit or force
-
-        bind = roll_hits(bind_dice, limit=int(lim))
-        resist = roll_hits(force * 2)
-        drain = roll_hits(drain_dice)
-
-        return BindingRoll(
-            force=int(force),
-            services_in=int(services_in),
-            drain_adjust=int(drain_adjust),
-            bind=bind,
-            resist=resist,
-            drain=drain,
-        )
-
     def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
         return BindingRollView(self, label, context)
 
@@ -385,79 +358,38 @@ class BindingRoll(RollRecordBase):
         await interaction.send_as_followup(drain_menu)
 
 
-@message_codec.alias("SummonResult")
-@dataclass(frozen=True)
-class SummonRoll(RollRecordBase):
-    # Inputs
-    force: int
-    drain_adjust: int  # additive override applied to DV after spirit hits
+@roll_command(desc="Roll to bind a summoned spirit. Costs a task, and reagents.")
+def roll_binding(
+        *,
+        force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spirit.")],
+        bind_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for binding.")],
+        drain_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
+        services_in: Annotated[app_commands.Range[int, 1, 50], Desc("Services before the binding attempt.")],
+        limit: Annotated[Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit (defaults to Force).")] = None,
+        drain_adjust: Annotated[app_commands.Range[int, -50, 50], Desc("Modifier applied to drain.")] = 0,
+        pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
+) -> BindingRoll:
+    if pre_edge:
+        bind = roll_exploding(bind_dice)
+    else:
+        bind = roll_hits(bind_dice, limit=limit or force)
+    resist = roll_hits(force * 2)
+    drain = roll_hits(drain_dice)
 
-    # Rolls
-    summon: HitsResult  # limited by limit/force via RollResult.limit
-    resist: HitsResult  # spirit resistance; dice = force
-    drain: HitsResult  # drain resistance roll
-
-    @property
-    def net_hits(self) -> int:
-        return self.summon.hits_limited - self.resist.hits_limited
-
-    @property
-    def succeeded(self) -> bool:
-        return self.net_hits > 0
-
-    @property
-    def drain_value(self) -> int:
-        return max(0, max(2, 2 * self.resist.hits_limited) + self.drain_adjust)
-
-    @property
-    def drain_taken(self) -> int:
-        return max(0, self.drain_value - self.drain.hits_limited)
-
-    @staticmethod
-    def roll(
-            *,
-            force: int,
-            summon_dice: int,
-            drain_dice: int,
-            limit: Optional[int] = None,
-            drain_adjust: int = 0,
-    ) -> SummonRoll:
-        lim = limit or force
-
-        summon = roll_hits(int(summon_dice), limit=int(lim))
-        resist = roll_hits(int(force))
-        drain = roll_hits(int(drain_dice))
-
-        return SummonRoll(
-            force=int(force),
-            drain_adjust=int(drain_adjust),
-            summon=summon,
-            resist=resist,
-            drain=drain,
-        )
-
-    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
-        return SummonRollView(self, label, context)
-
-    @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
-        summon_accessor = RollAccessor[SummonRoll](getter=lambda r: r.summon,
-                                                   setter=lambda r, v: replace(r, summon=v))
-        summon_menu = GenericEdgeMenu(f"Edge Summoning for {record.label}?", summon_accessor, record.message_id,
-                                      interaction)
-        await interaction.send_as_followup(summon_menu)
-
-        drain_accessor = RollAccessor[SummonRoll](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
-        drain_menu = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, interaction)
-        await interaction.send_as_followup(drain_menu)
-
+    return BindingRoll(
+        force=force,
+        services_in=services_in,
+        drain_adjust=drain_adjust,
+        bind=bind,
+        resist=resist,
+        drain=drain,
+    )
 
 @message_codec.alias("SpellcastResult")
 @dataclass(frozen=True)
 class SpellRoll(RollRecordBase):
     # Inputs
     force: int
-    limit: int
     drain_value: int
 
     # Rolls
@@ -503,29 +435,6 @@ class SpellRoll(RollRecordBase):
 
         return color
 
-    @staticmethod
-    def roll(
-            *,
-            force: int,
-            cast_dice: int,
-            drain_value: int,
-            drain_dice: int,
-            limit: Optional[int] = None,
-    ) -> SpellRoll:
-        lim = force if limit is None else limit
-
-        cast = roll_hits(cast_dice, limit=limit or 0)
-
-        drain = roll_hits(drain_dice)
-
-        return SpellRoll(
-            force=force,
-            limit=lim,
-            drain_value=drain_value,
-            cast=cast,
-            drain=drain,
-        )
-
     def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
         return SpellRollView(self, label, context)
 
@@ -542,129 +451,96 @@ class SpellRoll(RollRecordBase):
         await interaction.send_as_followup(menu2)
 
 
-_magic_commands: list[tuple[str, str]] = [
-    ("Cast a Spell", SpellRoll.__name__),
-    ("Create Alchemical Preparation", AlchemyCreateRoll.__name__),
-    ("Summon a Spirit", SummonRoll.__name__),
-    ("Bind a Spirit", BindingRoll.__name__),
-]
+@roll_command(desc="Roll to cast a spell. Check the drain code and adjust it accordingly.")
+def roll_spell(
+        *,
+        force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spell.")],
+        cast_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for spellcasting.")],
+        drain_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
+        drain_code: Annotated[app_commands.Range[int, -50, 50], Desc("Drain value, relative to Force. e.g. `-3`")],
+        limit_override: Annotated[
+            Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit override (defaults to Force).")] = None,
+        pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
+) -> SpellRoll:
+    if pre_edge:
+        cast = roll_exploding(cast_dice)
+    else:
+        cast = roll_hits(cast_dice, limit=limit_override or force)
+    drain = roll_hits(drain_dice)
 
-_LIMIT_MODIFIER = ArgSpec("limit_modifier", "int", aliases=("mod_limit",), suggested_values=(-1, 1, 5, 6, 7))
-_LIMIT_OVERRIDE = ArgSpec("limit_override", "int", aliases=("override_limit",), suggested_values=(3, 4, 5, 6, 12))
-_PRE_EDGE = ArgSpec("pre-edge", "flag", aliases=("preedge", "pre_edge"))
-_SERVICES = ArgSpec("services", "int", aliases=(), suggested_values=(1, 2, 3, 4, 5))
-_GREMLINS = ArgSpec("gremlins", "int", aliases=(), suggested_values=(1, 2, 3, 4))
-_DRAIN_MODIFIER = ArgSpec("drain_modifier", "int", aliases=tuple("dv_mod"), suggested_values=(-3, -1, 0, 3))
-
-BINDING_REQUIRED = _SERVICES
-BINDING_OPTIONAL = _LIMIT_OVERRIDE, _LIMIT_MODIFIER, _DRAIN_MODIFIER
-SPELL_REQUIRED = _DRAIN_MODIFIER
-SPELL_OPTIONAL = _LIMIT_OVERRIDE, _LIMIT_MODIFIER
-
-ALL_MAGIC_EXTRA_SPECS = _LIMIT_OVERRIDE, _LIMIT_MODIFIER, _DRAIN_MODIFIER
-
-drain_modifier = "Drain value modifier. For conjury, this will usually be 0 unless you are spending radical reagents.",
-
-
-async def handle_magic_autocomplete(interaction: Interaction[ClientContext], current: str) -> list[str]:
-    action_name = getattr(interaction.namespace, "action", None)
-
-    match action_name:
-        case BindingRoll.__name__:
-            extra_specs = BINDING_REQUIRED + BINDING_OPTIONAL
-        case _:
-            extra_specs = ALL_MAGIC_EXTRA_SPECS
-
-    suggestions = build_args_autocomplete_suggestions(
-        current,
-        extra_specs,
-        maximum_suggestions=25,
+    return SpellRoll(
+        force=force,
+        drain_value=force + drain_code,
+        cast=cast,
+        drain=drain,
     )
-    return [app_commands.Choice(name=text or "(empty)", value=text) for text in suggestions]
 
 
-def parse_extras_list(extras: list[str]) -> dict[str, str]:
-    result: dict[str, str] = {}
+@message_codec.alias("SummonResult")
+@dataclass(frozen=True)
+class SummonRoll(RollRecordBase):
+    # Inputs
+    force: int
+    drain_adjust: int  # additive override applied to DV after spirit hits
 
-    for item in extras:
-        key, sep, value = item.partition("=")
-        key = key.strip()
-        if not key:
-            continue
+    # Rolls
+    summon: HitsResult  # limited by limit/force via RollResult.limit
+    resist: HitsResult  # spirit resistance; dice = force
+    drain: HitsResult  # drain resistance roll
 
-        result[key] = value.strip() if sep else ""
+    @property
+    def net_hits(self) -> int:
+        return self.summon.hits_limited - self.resist.hits_limited
 
-    return result
+    @property
+    def succeeded(self) -> bool:
+        return self.net_hits > 0
+
+    @property
+    def drain_value(self) -> int:
+        return max(0, max(2, 2 * self.resist.hits_limited) + self.drain_adjust)
+
+    @property
+    def drain_taken(self) -> int:
+        return max(0, self.drain_value - self.drain.hits_limited)
+
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return SummonRollView(self, label, context)
+
+    @classmethod
+    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
+        summon_accessor = RollAccessor[SummonRoll](getter=lambda r: r.summon,
+                                                   setter=lambda r, v: replace(r, summon=v))
+        summon_menu = GenericEdgeMenu(f"Edge Summoning for {record.label}?", summon_accessor, record.message_id,
+                                      interaction)
+        await interaction.send_as_followup(summon_menu)
+
+        drain_accessor = RollAccessor[SummonRoll](getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v))
+        drain_menu = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, interaction)
+        await interaction.send_as_followup(drain_menu)
 
 
-def parse_int(s: str | None, default: int | None = None) -> int | None:
-    try:
-        return int(s) if s is not None else default
-    except ValueError:
-        return default
+@roll_command(desc="Roll to summon a spirit.")
+def roll_summon(*,
+                force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spirit.")],
+                summon_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for summoning.")],
+                drain_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
+                limit_override: Annotated[
+                    Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit (defaults to Force).")] = None,
+                drain_adjust: Annotated[app_commands.Range[int, -50, 50], Desc("Modifier applied to drain.")] = 0,
+                pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
+                ) -> SummonRoll:
+    if pre_edge:
+        summon = roll_exploding(summon_dice)
+    else:
+        summon = roll_hits(summon_dice, limit=limit_override or force)
+    resist = roll_hits(force)
+    drain = roll_hits(drain_dice)
 
-
-def register(group: app_commands.Group) -> None:
-    @group.command(name="magic", description="All magic-related rolls (SR5).")
-    @app_commands.describe(
-        action="What type of magical action you are initiating",
-        label="A label to describe the roll.",
-        force="Force of the effect",
-        action_dice="Dice pool (1-99).",
-        drain_dice="Drain resistance dice pool (1-99).",
-        extras="Additional action-specific data. Autocompletes."
+    return SummonRoll(
+        force=force,
+        drain_adjust=drain_adjust,
+        summon=summon,
+        resist=resist,
+        drain=drain,
     )
-    @app_commands.choices(action=[
-        app_commands.Choice(
-            name=k,
-            value=v
-        ) for (k, v) in _magic_commands
-    ])
-    @app_commands.autocomplete(extras=handle_magic_autocomplete)
-    async def cmd(
-            interaction: Interaction[ClientContext],
-            action: app_commands.Choice[str],
-            label: str,
-            force: app_commands.Range[int, 1, 50],
-            action_dice: app_commands.Range[int, 1, 99],
-            drain_modifier: app_commands.Range[int, -99, 99],
-            drain_dice: app_commands.Range[int, 1, 99],
-            extras: str
-    ) -> None:
-        extra_args = dict(parse_extras_list(extras.split(",")))
-        limit = parse_int(extra_args.get("limit"), None)
-        match action.value:
-            case SpellRoll.__name__:
-                result = SpellRoll.roll(
-                    force=int(force),
-                    cast_dice=int(action_dice),
-                    drain_value=int(force + drain_modifier),
-                    drain_dice=int(drain_dice),
-                    limit=int(limit) if limit is not None else None,
-                )
-            case AlchemyCreateRoll.__name__:
-                result = AlchemyCreateRoll.roll(
-                    force=int(force),
-                    cast_dice=int(action_dice),
-                    drain_value=int(force + drain_modifier),
-                    drain_dice=int(drain_dice),
-                    limit=int(limit) if limit is not None else None,
-                )
-            case SummonRoll.__name__:
-                result = SummonRoll.roll(
-                    force=int(force),
-                    summon_dice=int(action_dice),
-                    drain_dice=int(drain_dice),
-                    limit=limit or 0,
-                    drain_adjust=int(drain_modifier),
-                )
-            case BindingRoll.__name__:
-                result = BindingRoll.roll(
-                    force=int(force),
-                    services_in=int(extra_args.get("services")),
-                    bind_dice=int(action_dice),
-                    drain_dice=int(drain_dice),
-                    drain_adjust=int(drain_modifier),
-                    limit=int(limit) if limit is not None else None,
-                )
-        await InteractionContext(interaction).transmit_result(label=label, result=result)

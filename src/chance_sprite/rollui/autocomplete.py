@@ -12,6 +12,73 @@ log = logging.getLogger(__name__)
 ValueKind = Literal["flag", "int"]
 
 
+#
+# _magic_commands: list[tuple[str, str]] = [
+#     ("Cast a Spell", SpellRoll.__name__),
+#     ("Create Alchemical Preparation", AlchemyCreateRoll.__name__),
+#     ("Summon a Spirit", SummonRoll.__name__),
+#     ("Bind a Spirit", BindingRoll.__name__),
+# ]
+#
+# _LIMIT_MODIFIER = ArgSpec("limit_modifier", "int", aliases=("mod_limit",), suggested_values=(-1, 1, 5, 6, 7))
+# _LIMIT_OVERRIDE = ArgSpec("limit_override", "int", aliases=("override_limit",), suggested_values=(3, 4, 5, 6, 12))
+# _PRE_EDGE = ArgSpec("pre-edge", "flag", aliases=("preedge", "pre_edge"))
+# _SERVICES = ArgSpec("services", "int", aliases=(), suggested_values=(1, 2, 3, 4, 5))
+# _GREMLINS = ArgSpec("gremlins", "int", aliases=(), suggested_values=(1, 2, 3, 4))
+# _DRAIN_MODIFIER = ArgSpec("drain_modifier", "int", aliases=tuple("dv_mod"), suggested_values=(-3, -1, 0, 3))
+#
+# BINDING_REQUIRED = _SERVICES
+# BINDING_OPTIONAL = _LIMIT_OVERRIDE, _LIMIT_MODIFIER, _DRAIN_MODIFIER
+# SPELL_REQUIRED = _DRAIN_MODIFIER
+# SPELL_OPTIONAL = _LIMIT_OVERRIDE, _LIMIT_MODIFIER
+#
+# ALL_MAGIC_EXTRA_SPECS = _LIMIT_OVERRIDE, _LIMIT_MODIFIER, _DRAIN_MODIFIER
+#
+
+
+# @dataclass(frozen=True)
+# class CommandParamSpec:
+#     name: str
+#     desc: str
+#     range: app_commands.Range | app_commands.Choice | app_commands.Transform
+#
+# LABEL_PARAM = CommandParamSpec(name="label", desc="A label to describe the roll.", range=app_commands.Range[str, 3, 100])
+# FORCE_PARAM = CommandParamSpec(name="force", desc="Force of the effect.", range=app_commands.Range[int, 1, 50])
+# ACTION_PARAM = CommandParamSpec(name="action_dice", desc="Dice pool for the action.", range=app_commands.Range[int, 1, 99])
+# DRAIN_DICE_PARAM = CommandParamSpec(name="drain_dice", desc="Dice pool for resisting drain after the action.", range=app_commands.Range[int, 1, 99])
+# SERVICES_PARAM = CommandParamSpec(name="services_in", desc="How many services the spirit has before the binding attempt.", range=app_commands.Range[int, 1, 99])
+
+#
+# async def handle_magic_autocomplete(interaction: Interaction[ClientContext], current: str) -> list[str]:
+#     action_name = getattr(interaction.namespace, "action", None)
+#
+#     match action_name:
+#         case BindingRoll.__name__:
+#             extra_specs = BINDING_REQUIRED + BINDING_OPTIONAL
+#         case _:
+#             extra_specs = ALL_MAGIC_EXTRA_SPECS
+#
+#     suggestions = build_args_autocomplete_suggestions(
+#         current,
+#         extra_specs,
+#         maximum_suggestions=25,
+#     )
+#     return [app_commands.Choice(name=text or "(empty)", value=text) for text in suggestions]
+#
+#
+# def parse_extras_list(extras: list[str]) -> dict[str, str]:
+#     result: dict[str, str] = {}
+#
+#     for item in extras:
+#         key, sep, value = item.partition("=")
+#         key = key.strip()
+#         if not key:
+#             continue
+#
+#         result[key] = value.strip() if sep else ""
+#
+#     return result
+
 @dataclass(frozen=True)
 class ArgSpec:
     canonical_key: str

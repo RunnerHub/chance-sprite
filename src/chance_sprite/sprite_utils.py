@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import logging
+import types
+from datetime import timedelta
+from typing import Any, get_origin, Union, get_args
 
 log = logging.getLogger(__name__)
 
@@ -36,3 +39,48 @@ def levenshtein_distance(left: str, right: str) -> int:
 def split_argstr(args_text: str) -> list[str]:
     # comma-separated tokens
     return [token.strip() for token in args_text.split(",") if token.strip()]
+
+
+def parse_int(s: str | None, default: int | None = None) -> int | None:
+    try:
+        return int(s) if s is not None else default
+    except ValueError:
+        return default
+
+
+def is_optional_int(tp: Any) -> bool:
+    origin = get_origin(tp)
+    if origin in (Union, types.UnionType):
+        args = set(get_args(tp))
+        return int in args and type(None) in args
+    return False
+
+
+def plural_s(n, s: str = "s"):
+    if n == 1:
+        return ""
+    else:
+        return s
+
+
+def humanize_timedelta(td: timedelta) -> str:
+    seconds = int(td.total_seconds())
+    parts = []
+
+    weeks, seconds = divmod(seconds, 604800)
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+
+    if weeks:
+        parts.append(f"{weeks} week{plural_s(weeks)}")
+    if days:
+        parts.append(f"{days} day{plural_s(days)}")
+    if hours:
+        parts.append(f"{hours} hour{plural_s(hours)}")
+    if minutes:
+        parts.append(f"{minutes} minute{plural_s(minutes)}")
+    if not parts:
+        parts.append(f"{seconds} second{plural_s(seconds)}")
+
+    return ", ".join(parts)

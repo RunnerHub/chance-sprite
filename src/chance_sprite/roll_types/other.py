@@ -1,20 +1,22 @@
-# startingcash.py
+# other.py
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Annotated
 
-from discord import app_commands, Interaction
+from discord import app_commands
 from discord import ui
 
 from chance_sprite.result_types import AdditiveResult
+from ..fungen import roll_command, Desc, Choices
 from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
 from ..roller import additive_roll
 from ..rollui.commonui import build_header
 from ..rollui.edge_menu_persist import EdgeMenuButton
-from ..sprite_context import ClientContext, InteractionContext
+from ..sprite_context import InteractionContext
 
 
 class StartingCashRollView(ui.LayoutView):
@@ -85,22 +87,19 @@ class StartingCashRoll(RollRecordBase):
         pass
 
 
-def register(group: app_commands.Group) -> None:
-    @group.command(name="startingcash", description="Roll for starting cash.")
-    @app_commands.describe(
-        label="Who is it for?",
-        lifestyle="What is their lifestyle level?"
+LIFESTYLE_CHOICES = tuple(
+    app_commands.Choice(
+        name=f"{tier.label} ({tier.dice}D6×{tier.mult}¥)",
+        value=tier.name,
     )
-    @app_commands.choices(lifestyle=[
-        app_commands.Choice(
-            name=f"{tier.label} ({tier.dice}D6×{tier.mult}¥)",
-            value=tier.name
-        ) for tier in LifestyleStartingCash
-    ])
-    async def cmd(
-            interaction: Interaction[ClientContext],
-        label: str,
-        lifestyle: app_commands.Choice[str]
-    ) -> None:
-        result = StartingCashRoll.roll(lifestyle=LifestyleStartingCash[lifestyle.value])
-        await InteractionContext(interaction).transmit_result(label=label, result=result)
+    for tier in LifestyleStartingCash
+)
+
+
+@roll_command(desc="Roll for starting cash.")
+def roll_startingcash(
+        *,
+        lifestyle: Annotated[str, Desc("What is their lifestyle level?"), Choices(LIFESTYLE_CHOICES)],
+) -> StartingCashRoll:
+    tier = LifestyleStartingCash[lifestyle]
+    return StartingCashRoll.roll(lifestyle=tier)
