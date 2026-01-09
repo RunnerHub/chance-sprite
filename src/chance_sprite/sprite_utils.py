@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import logging
-import types
 from datetime import timedelta
-from typing import Any, get_origin, Union, get_args
+from typing import Protocol
 
 log = logging.getLogger(__name__)
 
+
+class HasNetHits(Protocol):
+    net_hits: int
 
 def normalize_key(raw_text: str) -> str:
     # Casefold + remove separators, so "pre-edge" matches "preedge"
@@ -48,14 +50,6 @@ def parse_int(s: str | None, default: int | None = None) -> int | None:
         return default
 
 
-def is_optional_int(tp: Any) -> bool:
-    origin = get_origin(tp)
-    if origin in (Union, types.UnionType):
-        args = set(get_args(tp))
-        return int in args and type(None) in args
-    return False
-
-
 def plural_s(n, s: str = "s"):
     if n == 1:
         return ""
@@ -84,3 +78,14 @@ def humanize_timedelta(td: timedelta) -> str:
         parts.append(f"{seconds} second{plural_s(seconds)}")
 
     return ", ".join(parts)
+
+
+def color_by_net_hits(net: int):
+    # Color by outcome
+    if net > 0:
+        accent = 0x88FF88
+    elif net < 0:
+        accent = 0xFF8888
+    else:
+        accent = 0x8888FF
+    return accent

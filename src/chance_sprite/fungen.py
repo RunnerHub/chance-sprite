@@ -38,6 +38,7 @@ def extract_choices(metadata: list[Any]) -> tuple[app_commands.Choice[Any], ...]
     return None
 
 
+# decorator to indicate a command that should be
 def roll_command(*, group: str | None = None, name: str | None = None, desc: str | None = None):
     meta = RollMeta(group=group, name=name, desc=desc)
 
@@ -104,14 +105,14 @@ def build_discord_callback(
     signature_parts = ["interaction"]
     annotation_dict: dict[str, Any] = {"interaction": discord.Interaction}
     defaults: dict[str, Any] = {}
-    choices_by_param: dict[str, list[app_commands.Choice[Any]]] = {}
+    choices_by_param: dict[str, tuple[app_commands.Choice[Any]]] = {}
 
     for p in params:
         pname = p["name"]
         annotation_dict[pname] = p["annotation"]
         ch = p.get("choices")
         if ch:
-            choices_by_param[p["name"]] = list(ch)
+            choices_by_param[p["name"]] = ch
         if p["default"] is ...:
             signature_parts.append(pname)
         else:
@@ -147,9 +148,8 @@ async def invoke_roll_and_transmit(
         roll_func: RollFunc,
         raw_args: Mapping[str, Any],
 ) -> None:
-    label = raw_args.get("label", "")
     roll_kwargs = dict(raw_args)
-    roll_kwargs.pop("label", None)
+    label = roll_kwargs.pop("label", "")
     try:
         result = roll_func(**roll_kwargs)
     except TypeError as exc:

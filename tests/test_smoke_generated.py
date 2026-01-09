@@ -56,11 +56,6 @@ def has_desc(tp: Any) -> bool:
     return any(isinstance(m, Desc) for m in meta)
 
 
-def is_unionish(tp: Any) -> bool:
-    o = get_origin(tp)
-    return
-
-
 def is_optional(tp: Any) -> tuple[bool, Any]:
     origin = get_origin(tp)
     if origin not in (Union, types.UnionType):
@@ -217,5 +212,6 @@ async def test_roll_smoke_per_item(case: Case) -> None:
         return
 
     if hasattr(roll, "build_view"):
-        context = cast(ClientContext, FakeContext())
+        context_obj = cast(object, FakeContext())
+        context = cast(ClientContext, context_obj)
         roll.build_view("Smoke", context)

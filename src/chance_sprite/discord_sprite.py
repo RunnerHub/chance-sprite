@@ -41,9 +41,9 @@ class DiscordSprite(ClientContext):
     async def setup_hook(self) -> None:
         self.add_view(EdgeMenuPersist())
         log.info(f"Global sync: {self.enable_global_sync}")
+        self.tree.clear_commands(guild=None)
 
         if not self.enable_global_sync:
-            self.tree.clear_commands(guild=None)
             await self.tree.sync()
 
         # Load cogs/extensions

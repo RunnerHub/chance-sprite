@@ -260,14 +260,20 @@ class AlchemyCreateRoll(RollRecordBase):
 @roll_command(desc="Roll to create an alchemical preparation.")
 def roll_alchemy(
         *,
-        force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the alchemical preparation attempt.")],
-        alchemy_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for alchemy.")],
+        force: Annotated[
+            app_commands.Range[int, 1, 50], Desc("Force of the alchemical preparation attempt.")],
+        alchemy_dice: Annotated[
+            app_commands.Range[int, 1, 99], Desc("Dice pool for alchemy.")],
         drain_code: Annotated[
             app_commands.Range[int, -50, 50], Desc("Drain value modifier, relative to Force. e.g. `-3`")],
-        drain_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
+        drain_dice: Annotated[
+            app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
         limit_override: Annotated[
-            Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit override (defaults to Force).")] = None,
-        pre_edge: Annotated[bool, Desc("Pre-edge the test to create a preparation.")] = False,
+            Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit override (defaults to Force).")]
+        = None,
+        pre_edge: Annotated[
+            bool, Desc("Pre-edge the test to create a preparation.")]
+        = False,
 ) -> AlchemyCreateRoll:
     if pre_edge:
         cast = roll_exploding(alchemy_dice)
@@ -361,13 +367,23 @@ class BindingRoll(RollRecordBase):
 @roll_command(desc="Roll to bind a summoned spirit. Costs a task, and reagents.")
 def roll_binding(
         *,
-        force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spirit.")],
-        bind_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for binding.")],
-        drain_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
-        services_in: Annotated[app_commands.Range[int, 1, 50], Desc("Services before the binding attempt.")],
-        limit: Annotated[Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit (defaults to Force).")] = None,
-        drain_adjust: Annotated[app_commands.Range[int, -50, 50], Desc("Modifier applied to drain.")] = 0,
-        pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
+        force: Annotated[
+            app_commands.Range[int, 1, 50], Desc("Force of the spirit.")],
+        bind_dice: Annotated[
+            app_commands.Range[int, 1, 99], Desc("Dice pool for binding.")],
+        drain_dice: Annotated[
+            app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
+        services_in: Annotated[
+            app_commands.Range[int, 1, 50], Desc("Services before the binding attempt.")],
+        limit: Annotated[
+            Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit (defaults to Force).")]
+        = None,
+        drain_adjust: Annotated[
+            app_commands.Range[int, -50, 50], Desc("Modifier applied to drain.")]
+        = 0,
+        pre_edge: Annotated[
+            bool, Desc("Pre-edge the binding roll.")]
+        = False,
 ) -> BindingRoll:
     if pre_edge:
         bind = roll_exploding(bind_dice)
@@ -385,6 +401,7 @@ def roll_binding(
         drain=drain,
     )
 
+
 @message_codec.alias("SpellcastResult")
 @dataclass(frozen=True)
 class SpellRoll(RollRecordBase):
@@ -395,10 +412,6 @@ class SpellRoll(RollRecordBase):
     # Rolls
     cast: HitsResult
     drain: HitsResult
-
-    @property
-    def cast_hits_limited(self) -> int:
-        return min(self.cast.hits_limited, max(self.limit, 1))
 
     @property
     def drain_succeeded(self) -> Optional[bool]:
@@ -454,13 +467,20 @@ class SpellRoll(RollRecordBase):
 @roll_command(desc="Roll to cast a spell. Check the drain code and adjust it accordingly.")
 def roll_spell(
         *,
-        force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spell.")],
-        cast_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for spellcasting.")],
-        drain_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
-        drain_code: Annotated[app_commands.Range[int, -50, 50], Desc("Drain value, relative to Force. e.g. `-3`")],
+        force: Annotated[
+            app_commands.Range[int, 1, 50], Desc("Force of the spell.")],
+        cast_dice: Annotated[
+            app_commands.Range[int, 1, 99], Desc("Dice pool for spellcasting.")],
+        drain_dice: Annotated[
+            app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
+        drain_code: Annotated[
+            app_commands.Range[int, -50, 50], Desc("Drain value, relative to Force. e.g. `-3`")],
         limit_override: Annotated[
-            Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit override (defaults to Force).")] = None,
-        pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
+            Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit override (defaults to Force).")]
+        = None,
+        pre_edge: Annotated[
+            bool, Desc("Pre-edge the binding roll.")]
+        = False,
 ) -> SpellRoll:
     if pre_edge:
         cast = roll_exploding(cast_dice)
@@ -522,13 +542,21 @@ class SummonRoll(RollRecordBase):
 
 @roll_command(desc="Roll to summon a spirit.")
 def roll_summon(*,
-                force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spirit.")],
-                summon_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for summoning.")],
-                drain_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
+                force: Annotated[
+                    app_commands.Range[int, 1, 50], Desc("Force of the spirit.")],
+                summon_dice: Annotated[
+                    app_commands.Range[int, 1, 99], Desc("Dice pool for summoning.")],
+                drain_dice: Annotated[
+                    app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
                 limit_override: Annotated[
-                    Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit (defaults to Force).")] = None,
-                drain_adjust: Annotated[app_commands.Range[int, -50, 50], Desc("Modifier applied to drain.")] = 0,
-                pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
+                    Optional[app_commands.Range[int, 0, 50]], Desc("Optional limit (defaults to Force).")]
+                = None,
+                drain_adjust: Annotated[
+                    app_commands.Range[int, -50, 50], Desc("Modifier applied to drain.")]
+                = 0,
+                pre_edge: Annotated[
+                    bool, Desc("Pre-edge the binding roll.")]
+                = False,
                 ) -> SummonRoll:
     if pre_edge:
         summon = roll_exploding(summon_dice)

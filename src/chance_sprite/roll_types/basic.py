@@ -9,7 +9,6 @@ from boltons.cacheutils import cachedproperty
 from discord import app_commands
 from discord import ui
 
-from chance_sprite.result_types import Glitch
 from chance_sprite.result_types import HitsResult
 from chance_sprite.roller import roll_hits, roll_exploding
 from ..fungen import Desc, roll_command
@@ -20,13 +19,13 @@ from ..rollui.commonui import build_header, RollAccessor
 from ..rollui.edge_menu_persist import EdgeMenuButton
 from ..rollui.generic_edge_menu import GenericEdgeMenu
 from ..sprite_context import InteractionContext
-from ..sprite_utils import humanize_timedelta
+from ..sprite_utils import humanize_timedelta, color_by_net_hits
 
 
 class ThresholdView(ui.LayoutView):
     def __init__(self, roll_result: ThresholdRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
-        container = build_header(EdgeMenuButton(), label, roll_result.result_color)
+        container = build_header(EdgeMenuButton(), label, color_by_net_hits(roll_result.net_hits))
 
         dice = roll_result.result.render_roll(context)
         if roll_result.threshold:
@@ -62,40 +61,31 @@ class ThresholdRoll(RollRecordBase):
             return 0
         return self.result.hits_limited - self.threshold
 
-    @property
-    def result_color(self) -> int:
-        succ = self.succeeded
-        if self.threshold <= 0:
-            color = 0x8888FF
-        else:
-            color = 0x88FF88 if succ else 0xFF8888
-
-        if self.result.glitch == Glitch.CRITICAL:
-            color = 0xFF0000
-        if self.result.glitch == Glitch.GLITCH:
-            color = 0xCC44CC if succ else 0xCC4444
-        return color
-
     def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
         return ThresholdView(self, label, context)
 
     @classmethod
     async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
         result_accessor = RollAccessor[ThresholdRoll](getter=lambda r: r.result,
-                                                        setter=lambda r, v: replace(r, result=v))
+                                                      setter=lambda r, v: replace(r, result=v))
         menu = GenericEdgeMenu(f"Edge for {record.label}:", result_accessor, record.message_id, interaction)
         await interaction.send_as_followup(menu)
 
 
 @roll_command(desc="Roll some d6s, Shadowrun-style.")
 def roll_simple(*,
-                dice: Annotated[app_commands.Range[int, 1, 99], Desc("Number of dice (1-99).")],
-                threshold: Annotated[app_commands.Range[int, 0, 99], Desc("Threshold to reach (0 if none).")],
+                dice: Annotated[
+                    app_commands.Range[int, 1, 99], Desc("Number of dice (1-99).")],
+                threshold: Annotated[
+                    app_commands.Range[int, 0, 99], Desc("Threshold to reach (0 if none).")],
                 limit: Annotated[
                     app_commands.Range[int, 0, 99], Desc("The limit associated with the roll (0 if none).")],
-                gremlins: Annotated[app_commands.Range[int, 0, 4], Desc(
-                    "Reduces 1s needed to glitch. Gremlins, Social Stress, etc.")] = 0,
-                pre_edge: Annotated[bool, Desc("Pre-edge Break the Limit.")] = False,
+                gremlins: Annotated[
+                    app_commands.Range[int, 0, 4], Desc("Reduces 1s needed to glitch. Gremlins, Social Stress, etc.")]
+                = 0,
+                pre_edge: Annotated[
+                    bool, Desc("Pre-edge Break the Limit.")]
+                = False,
                 ):
     if pre_edge:
         roll = roll_exploding(dice, gremlins=gremlins)
@@ -193,12 +183,19 @@ class ExtendedRoll(RollRecordBase):
 
 @roll_command(desc="Extended roll: repeated tests with shrinking dice pool until a threshold is met.")
 def roll_extended(*,
-                  dice: Annotated[app_commands.Range[int, 1, 99], Desc("Starting dice pool (1-99).")],
-                  threshold: Annotated[app_commands.Range[int, 1, 99], Desc("Total hits needed (>=1).")],
-                  max_iters: Annotated[app_commands.Range[int, 1, 99], Desc("Maximum number of rolls (1-99).")] = 10,
-                  limit: Annotated[app_commands.Range[int, 0, 99], Desc("Limit applicable to each roll.")] = 0,
-                  gremlins: Annotated[Optional[app_commands.Range[int, 1, 99]], Desc(
-                      "Reduce the number of 1s required for a glitch.")] = None
+                  dice: Annotated[
+                      app_commands.Range[int, 1, 99], Desc("Starting dice pool (1-99).")],
+                  threshold: Annotated[
+                      app_commands.Range[int, 1, 99], Desc("Total hits needed (>=1).")],
+                  max_iters: Annotated[
+                      app_commands.Range[int, 1, 99], Desc("Maximum number of rolls (1-99).")]
+                  = 10,
+                  limit: Annotated[
+                      app_commands.Range[int, 0, 99], Desc("Limit applicable to each roll.")]
+                  = 0,
+                  gremlins: Annotated[
+                      Optional[app_commands.Range[int, 1, 99]], Desc("Reduce the number of 1s required for a glitch.")]
+                  = None
                   ) -> ExtendedRoll:
     iterations: list[ExtendedIteration] = []
     cumulative = 0
@@ -225,24 +222,12 @@ def roll_extended(*,
     )
 
 
-def _decide_color(roll_result: OpposedRoll):
-    # Color by outcome
-    net = roll_result.net_hits
-    if net > 0:
-        accent = 0x88FF88
-    elif net < 0:
-        accent = 0xFF8888
-    else:
-        accent = 0x8888FF
-    return accent
-
-
 class OpposedRollView(ui.LayoutView):
     def __init__(self, roll_result: OpposedRoll, label: str, context: InteractionContext):
         super().__init__(timeout=None)
 
         menu_button = EdgeMenuButton()
-        container = build_header(menu_button, label, _decide_color(roll_result))
+        container = build_header(menu_button, label, color_by_net_hits(roll_result.net_hits))
 
         # Initiator block
         container.add_item(ui.TextDisplay(
@@ -295,16 +280,24 @@ class OpposedRoll(RollRecordBase):
 
 @roll_command(desc="Opposed roll: initiator vs defender. Defender wins ties.")
 def roll_opposed(*,
-                 initiator_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Initiator dice pool (1-99).")],
-                 defender_dice: Annotated[app_commands.Range[int, 1, 99], Desc("Defender dice pool (1-99).")],
-                 initiator_limit: Annotated[app_commands.Range[int, 0, 99], Desc("Initiator's limit, accuracy, etc.")],
+                 initiator_dice: Annotated[
+                     app_commands.Range[int, 1, 99], Desc("Initiator dice pool (1-99).")],
+                 defender_dice: Annotated[
+                     app_commands.Range[int, 1, 99], Desc("Defender dice pool (1-99).")],
+                 initiator_limit: Annotated[
+                     app_commands.Range[int, 0, 99], Desc("Initiator's limit, accuracy, etc.")],
                  defender_limit: Annotated[
-                     app_commands.Range[int, 0, 99], Desc("Defender's limit, if applicable.")] = 0,
+                     app_commands.Range[int, 0, 99], Desc("Defender's limit, if applicable.")]
+                 = 0,
                  initiator_gremlins: Annotated[
-                     app_commands.Range[int, 0, 4], Desc("Reduce the number of 1s required for a glitch.")] = 0,
+                     app_commands.Range[int, 0, 4], Desc("Reduce the number of 1s required for a glitch.")]
+                 = 0,
                  defender_gremlins: Annotated[
-                     app_commands.Range[int, 0, 4], Desc("Reduce the number of 1s required for a glitch.")] = 0,
-                 pre_edge: Annotated[bool, Desc("Initiator can pre-edge: Break the Limit.")] = False,
+                     app_commands.Range[int, 0, 4], Desc("Reduce the number of 1s required for a glitch.")]
+                 = 0,
+                 pre_edge: Annotated[
+                     bool, Desc("Initiator can pre-edge: Break the Limit.")]
+                 = False,
                  ) -> OpposedRoll:
     if pre_edge:
         initiator = roll_exploding(initiator_dice, gremlins=initiator_gremlins)
@@ -321,7 +314,7 @@ class AvailabilityRollView(ui.LayoutView):
         if roll_result.base_delivery_time:
             label += f"\n-# Cost: {roll_result.cost}; base delivery time: {humanize_timedelta(roll_result.base_delivery_time)}"
         menu_button = EdgeMenuButton()
-        container = build_header(menu_button, label, _decide_color(roll_result))
+        container = build_header(menu_button, label, color_by_net_hits(roll_result.net_hits))
 
         # Initiator block
         container.add_item(ui.TextDisplay(
@@ -376,7 +369,7 @@ class AvailabilityRoll(RollRecordBase):
         return self.initiator.hits_limited - self.defender.hits_limited
 
     @property
-    def delivery_time_multiplier(self) -> int:
+    def delivery_time_multiplier(self) -> float | None:
         if self.net_hits < 0:
             return None
         elif self.net_hits == 0:
@@ -385,7 +378,7 @@ class AvailabilityRoll(RollRecordBase):
             return 1 / self.net_hits
 
     @property
-    def base_delivery_time(self):
+    def base_delivery_time(self) -> timedelta | None:
         if not self.cost:
             return None
         elif self.cost <= 100:
@@ -422,12 +415,19 @@ def roll_availability(*,
                           app_commands.Range[int, 1, 99], Desc("Dice for the negotiation test.")],
                       availability: Annotated[app_commands.Range[int, 0, 99], Desc(
                           "Availability of the desired item (opposes your roll).")],
-                      social_limit: Annotated[app_commands.Range[int, 0, 99], Desc("Social limit if applicable.")] = 0,
+                      social_limit: Annotated[
+                          app_commands.Range[int, 0, 99], Desc("Social limit if applicable.")]
+                      = 0,
                       cost: Annotated[
-                          Optional[app_commands.Range[int, 0, 1000000]], Desc("Cost of the item in nuyen.")] = None,
-                      street_cred_mod: Annotated[app_commands.Range[int, -99, 99], Desc(
-                          "-1 for every 10 street cred (optional, you can just factor it in yourself).")] = 0,
-                      pre_edge: Annotated[bool, Desc("Pre-edge the availability roll.")] = False,
+                          Optional[app_commands.Range[int, 0, 1000000]], Desc("Cost of the item in nuyen.")]
+                      = None,
+                      street_cred_mod: Annotated[
+                          app_commands.Range[int, -99, 99],
+                          Desc("-1 for every 10 street cred (optional, you can just factor it in yourself).")]
+                      = 0,
+                      pre_edge: Annotated[
+                          bool, Desc("Pre-edge the availability roll.")]
+                      = False,
                       ) -> AvailabilityRoll:
     if pre_edge:
         initiator = roll_exploding(acquisition_dice)
