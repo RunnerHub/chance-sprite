@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from . import Glitch
 from . import _default_random
 from ..sprite_context import InteractionContext
+from ..sprite_utils import limit_mask
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -76,18 +77,37 @@ class HitsResult:
         line += self.render_limited_hits()
         return line
 
+    def get_dice_mask(self):
+        return limit_mask(self.limit, self.rolls[:self.dice])
+
+    def choose_emojis(self, context: InteractionContext):
+        packs = context.emoji_manager.packs
+        chosen_emojis = packs.d6 if (self.glitch == Glitch.NONE) else context.emoji_manager.packs.d6_glitch
+        limited_emojis = packs.d6_limited if (
+                    self.glitch == Glitch.NONE) else context.emoji_manager.packs.d6_limited_glitch
+        return chosen_emojis, limited_emojis
+
     def render_dice(self, context: InteractionContext) -> str:
-        emojis = context.emoji_manager.packs.d6
+        chosen_emojis, limited_emojis = self.choose_emojis(context)
+
+        adjusted_rolls = self.rolls[:self.dice]
+        baleeted_dice = self.rolls[self.dice:self.original_dice]
+        mask = self.get_dice_mask()
+
+        dice_emojis = [
+            chosen_emojis[x - 1] if not mask or mask[i] else limited_emojis[x - 1]
+            for (i, x) in enumerate(adjusted_rolls)
+        ]
 
         if self.dice_adjustment < 0:
-            line = "".join(emojis[x - 1] for x in self.rolls[:self.dice])
-            line += "-~~" + "".join(str(x) for x in self.rolls[self.dice:self.original_dice]) + "~~"
+            line = "".join(dice_emojis)
+            line += "-~~" + "".join(str(x) for x in baleeted_dice) + "~~"
         else:
-            line = "".join(emojis[x - 1] for x in self.rolls[:self.original_dice])
+            line = "".join(dice_emojis[:self.original_dice])
 
         if len(self.rolls) > self.original_dice:
             if self.dice_adjustment > 0:
-                line += "+" + "".join(emojis[x - 1] for x in self.rolls[self.original_dice:self.dice])
+                line += "+" + "".join(dice_emojis[self.original_dice:])
             if len(self.rolls) > self.dice:
                 line += "-~~" + "".join(str(x) for x in self.rolls[self.dice:]) + "~~"
         return line

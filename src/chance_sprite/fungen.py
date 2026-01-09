@@ -105,14 +105,14 @@ def build_discord_callback(
     signature_parts = ["interaction"]
     annotation_dict: dict[str, Any] = {"interaction": discord.Interaction}
     defaults: dict[str, Any] = {}
-    choices_by_param: dict[str, tuple[app_commands.Choice[Any]]] = {}
+    choices_by_param: dict[str, list[app_commands.Choice[Any]]] = {}
 
     for p in params:
         pname = p["name"]
         annotation_dict[pname] = p["annotation"]
         ch = p.get("choices")
         if ch:
-            choices_by_param[p["name"]] = ch
+            choices_by_param[p["name"]] = list(ch)
         if p["default"] is ...:
             signature_parts.append(pname)
         else:

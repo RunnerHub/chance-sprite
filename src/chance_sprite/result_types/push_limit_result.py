@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from chance_sprite.result_types import Glitch
 from chance_sprite.result_types.hits_result import HitsResult
 from chance_sprite.sprite_context import InteractionContext
 
@@ -21,11 +22,18 @@ class PushTheLimitHitsResult(HitsResult):
         else:
             return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
 
+    def choose_emojis(self, context: InteractionContext):
+        packs = context.emoji_manager.packs
+        chosen_emojis = packs.d6 if (self.glitch == Glitch.NONE) else context.emoji_manager.packs.d6_glitch
+        limited_emojis = chosen_emojis
+        return chosen_emojis, limited_emojis
+
     def render_roll(self, context: InteractionContext):
         line = super().render_roll(context)
-        emojis = context.emoji_manager.packs.d6_ex
-        line += f"\n`>push:`" + "".join(emojis[x - 1] for x in self.exploded_dice[0]) + f" **{sum(1 for r in self.exploded_dice[0] if r in (5, 6))}** hits"
-        for roll in self.exploded_dice[1:]:
-            line += f"\n`explode:`" + "".join(emojis[x - 1] for x in roll) + f" **{sum(1 for r in roll if r in (5, 6))}** hits"
+        packs = context.emoji_manager.packs
+        chosen_emojis = packs.d6_ex
+        for roll in self.exploded_dice:
+            line += f"\n`+`{packs.push}" + "".join(
+                chosen_emojis[x - 1] for x in roll) + f" **{sum(1 for r in roll if r in (5, 6))}** hits"
         line += f"\n**{self.hits_limited}** Total Hits"
         return line

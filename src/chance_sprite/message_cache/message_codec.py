@@ -51,17 +51,34 @@ class MessageCodec:
         if isinstance(value, dict) and "type" in value:
             return self.dataclass_from_dict(value)
 
+        origin = get_origin(hint)
+
+        if origin is tuple:
+            if isinstance(value, (list, tuple)):
+                args = get_args(hint)
+                if len(args) == 2 and args[1] is ...:
+                    item_t = args[0]
+                    return tuple(self.decode_with_hint(x, item_t) for x in value)
+                if args:
+                    out = []
+                    for i, x in enumerate(value):
+                        t = args[i] if i < len(args) else Any
+                        out.append(self.decode_with_hint(x, t))
+                    return tuple(out)
+                return tuple(value)
+            return value
+
         # Recurse containers
         if isinstance(value, list):
             # try to use list[T] hint if present
-            if get_origin(hint) is list:
+            if origin is list:
                 (item_t,) = get_args(hint) or (Any,)
                 return [self.decode_with_hint(x, item_t) for x in value]
             return [self.decode_with_hint(x, Any) for x in value]
 
         if isinstance(value, dict):
             # If we have dict[K, V] type info, use it
-            if get_origin(hint) is dict:
+            if origin is dict:
                 key_t, val_t = get_args(hint) or (Any, Any)
 
                 def coerce_key(k: Any) -> Any:

@@ -89,3 +89,17 @@ def color_by_net_hits(net: int):
     else:
         accent = 0x8888FF
     return accent
+
+
+def limit_mask(limit, rolls):
+    if limit <= 0 or limit >= len(rolls):
+        return None
+    num_chosen = 0
+    mask = [False for _ in rolls]
+    for value in [6, 5, 4, 3, 2, 1]:
+        for (i, el) in enumerate(rolls):
+            if el == value:
+                mask[i] = True
+                num_chosen += 1
+                if num_chosen >= limit:
+                    return mask

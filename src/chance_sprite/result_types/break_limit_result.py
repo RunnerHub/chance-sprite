@@ -67,11 +67,20 @@ class BreakTheLimitHitsResult(HitsResult):
         else:
             return f" **{self.dice_hits}** hit{'' if self.dice_hits == 1 else 's'}"
 
+    def choose_emojis(self, context: InteractionContext):
+        packs = context.emoji_manager.packs
+        chosen_emojis = packs.d6_ex if (self.glitch == Glitch.NONE) else context.emoji_manager.packs.d6_ex_glitch
+        limited_emojis = chosen_emojis
+        return chosen_emojis, limited_emojis
+
     def render_roll(self, context: InteractionContext):
-        line = super().render_roll(context)
-        emojis = context.emoji_manager.packs.d6_ex
+        (chosen_emojis, _) = self.choose_emojis(context)
+        line = f"`{self.dice}d6:`" + self.render_dice(context) + " "
+        line += self.render_limited_hits()
         for roll in self.exploded_dice:
-            line += f"\n`explode:`" + "".join(emojis[x - 1] for x in roll) + f"**{sum(1 for r in roll if r in (5, 6))}** hits"
+            line += f"\n`+`{context.emoji_manager.packs.btl}"
+            line += f"" + "".join(
+                chosen_emojis[x - 1] for x in roll) + f" **{sum(1 for r in roll if r in (5, 6))}** hits "
         line += f"\n**{self.hits_limited}** Total Hits"
         return line
 
@@ -92,7 +101,7 @@ class BreakTheLimitHitsResult(HitsResult):
                 if sixes == 0:
                     break
             pairs: Iterable[tuple[tuple[int, ...], tuple[int, ...]]] = zip_longest(
-                new_exploded_dice, additional_explosions, fillvalue=[]
+                new_exploded_dice, tuple(additional_explosions), fillvalue=tuple()
             )
             new_exploded_dice = tuple(a + b for a, b in pairs)
             new_rolls = self.rolls + tuple(additional_rolls)

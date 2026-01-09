@@ -194,8 +194,8 @@ def roll_extended(*,
                       app_commands.Range[int, 0, 99], Desc("Limit applicable to each roll.")]
                   = 0,
                   gremlins: Annotated[
-                      Optional[app_commands.Range[int, 1, 99]], Desc("Reduce the number of 1s required for a glitch.")]
-                  = None
+                      Optional[app_commands.Range[int, 0, 4]], Desc("Reduce the number of 1s required for a glitch.")]
+                  = 0
                   ) -> ExtendedRoll:
     iterations: list[ExtendedIteration] = []
     cumulative = 0
