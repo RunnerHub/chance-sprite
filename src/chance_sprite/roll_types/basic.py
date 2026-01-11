@@ -160,7 +160,7 @@ class ExtendedRoll(RollRecordBase):
 
     @property
     def succeeded(self):
-        return self.final_hits > self.threshold
+        return self.final_hits >= self.threshold
 
     @cachedproperty
     def final_hits(self):
