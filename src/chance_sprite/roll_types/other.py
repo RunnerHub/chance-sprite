@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated
 
-from discord import app_commands
-from discord import ui
+from discord import app_commands, ui
 
 from chance_sprite.result_types import AdditiveResult
-from ..fungen import roll_command, Desc, Choices
+
+from ..fungen import Choices, Desc, roll_command
 from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
@@ -78,9 +78,7 @@ class StartingCashRoll(RollRecordBase):
         return StartingCashRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(
-        cls, record: MessageRecord, interaction: InteractionContext
-    ):
+    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
         pass
 
 
@@ -100,5 +98,7 @@ def roll_startingcash(
         str, Desc("What is their lifestyle level?"), Choices(LIFESTYLE_CHOICES)
     ],
 ) -> StartingCashRoll:
-    lifestyle = LifestyleStartingCash[lifestyle]
-    return StartingCashRoll(result=additive_roll(lifestyle.dice), lifestyle=lifestyle)
+    chosen_lifestyle = LifestyleStartingCash[lifestyle]
+    return StartingCashRoll(
+        result=additive_roll(chosen_lifestyle.dice), lifestyle=chosen_lifestyle
+    )

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import logging
-from typing import override, Any
+from typing import Any, override
 
-from discord import ui, ButtonStyle, Interaction, InteractionMessage
+from discord import ButtonStyle, Interaction, InteractionMessage, ui
 
 from chance_sprite.rollui.base_roll_view import BaseView
 from chance_sprite.rollui.modals import ResistModal
 from chance_sprite.sprite_context import ClientContext, InteractionContext
-
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class EdgeMenuButton(ui.Button):
         self.style = ButtonStyle.secondary
 
     @override
-    async def callback(self, interaction: Interaction[ClientContext]) -> Any:
+    async def callback(self, interaction: Interaction) -> Any:
         context = InteractionContext(interaction)
         # give the interaction a response so that our arbitrary number of menu followups will go through
         await interaction.response.defer(ephemeral=True)
@@ -39,7 +38,7 @@ class EdgeMenuButton(ui.Button):
             )
             return
 
-        message_record = interaction.client.message_store[msg.id]
+        message_record = context.message_store[msg.id]
         if message_record is None:
             await interaction.followup.send(
                 "Couldn't find that roll in the bot's database. Could be a bug, or maybe it expired?",
@@ -67,7 +66,7 @@ class ResistButton(ui.Button):
         self.style = ButtonStyle.primary
 
     @override
-    async def callback(self, interaction: Interaction[ClientContext]):
+    async def callback(self, interaction: Interaction):
         context = InteractionContext(interaction)
         msg = interaction.message
         if msg is None:
@@ -76,7 +75,7 @@ class ResistButton(ui.Button):
             )
             return
 
-        message_record = interaction.client.message_store[msg.id]
+        message_record = context.message_store[msg.id]
         if message_record is None:
             await interaction.followup.send(
                 "Couldn't find that roll in the bot's database. Could be a bug, or maybe it expired?",

@@ -7,3 +7,12 @@ from .close_call_result import CloseCallResult
 from .hits_result import HitsResult
 from .push_limit_result import PushTheLimitHitsResult
 from .second_chance_result import SecondChanceHitsResult
+
+__all__ = [
+    "AdditiveResult",
+    "BreakTheLimitHitsResult",
+    "CloseCallResult",
+    "HitsResult",
+    "PushTheLimitHitsResult",
+    "SecondChanceHitsResult",
+]

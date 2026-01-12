@@ -120,7 +120,7 @@ class HitsResult:
                 line += "-~~" + "".join(str(x) for x in self.rolls[self.dice :]) + "~~"
         return line
 
-    def render_glitch(self, context: InteractionContext):
+    def render_glitch(self, context: InteractionContext) -> str:
         if self.glitch == Glitch.GLITCH:
             return "```diff\n-Glitch!```"
         if self.glitch == Glitch.CRITICAL:

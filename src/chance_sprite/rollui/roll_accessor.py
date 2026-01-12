@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
+from typing import Callable
+
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import RollRecordBase
 from chance_sprite.result_types.hits_result import HitsResult
-
-
-from typing import Callable
 
 
 class GenericResultAccessor[R: RollRecordBase](ABC):
@@ -13,7 +12,7 @@ class GenericResultAccessor[R: RollRecordBase](ABC):
         pass
 
     @abstractmethod
-    def update(self, record: MessageRecord[R], result: HitsResult) -> R:
+    def update(self, record: MessageRecord[R], new_result: HitsResult) -> R:
         pass
 
 
@@ -29,5 +28,5 @@ class RollAccessor[R: RollRecordBase](GenericResultAccessor):
     def get(self, record: MessageRecord[R]) -> HitsResult:
         return self._get(record.roll_result)
 
-    def update(self, record: MessageRecord[R], value: HitsResult) -> R:
-        return self._set(record.roll_result, value)
+    def update(self, record: MessageRecord[R], new_result: HitsResult) -> R:
+        return self._set(record.roll_result, new_result)

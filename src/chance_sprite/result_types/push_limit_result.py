@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 
 from chance_sprite.result_types.hits_result import HitsResult
 from chance_sprite.sprite_context import InteractionContext
@@ -12,7 +13,7 @@ class PushTheLimitHitsResult(HitsResult):
     exploded_dice: tuple[tuple[int, ...], ...]
     rerolled_hits: int
 
-    @property
+    @cached_property
     def hits_limited(self):
         return self.dice_hits + self.rerolled_hits
 

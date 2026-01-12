@@ -3,9 +3,9 @@ from __future__ import annotations
 import importlib
 import pkgutil
 import sys
-from dataclasses import is_dataclass, fields
+from dataclasses import fields, is_dataclass
 from types import ModuleType
-from typing import Any, get_origin, get_args, get_type_hints
+from typing import Any, get_args, get_origin, get_type_hints
 
 
 class MessageCodec:
@@ -14,7 +14,7 @@ class MessageCodec:
         self._hint_cache: dict[type, dict[str, Any]] = {}
 
     def build_registry_default(self):
-        from .. import result_types, roll_types, message_cache, rollui, emojis
+        from .. import emojis, message_cache, result_types, roll_types, rollui
 
         self.build_registry([result_types, roll_types, message_cache, rollui, emojis])
 
@@ -138,7 +138,7 @@ class MessageCodec:
 
     def dict_from_dataclass(self, obj: Any) -> Any:
         if is_dataclass(obj):
-            type_tag = getattr(obj.__class__, "__tag__", obj.__class__.__name__)
+            type_tag = getattr(type(obj), "__tag__", type(obj).__name__)
             out = {"type": type_tag}
             for f in fields(obj):
                 out[f.name] = self.dict_from_dataclass(getattr(obj, f.name))
