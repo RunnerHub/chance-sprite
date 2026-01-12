@@ -8,7 +8,8 @@ from discord import ui, WebhookMessage, Interaction, ButtonStyle
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types.hits_result import HitsResult
 from chance_sprite.roller import second_chance, push_the_limit, close_call
-from chance_sprite.rollui.commonui import GenericResultAccessor
+from chance_sprite.rollui.base_roll_view import BaseMenuView
+from chance_sprite.rollui.roll_accessor import GenericResultAccessor
 from chance_sprite.rollui.modals import NumberInputModal, ConfirmModal
 from chance_sprite.sprite_context import InteractionContext, ClientContext
 
@@ -105,7 +106,7 @@ class AdjustDiceButton(AdjustButton):
     async def callback(self, interaction: Interaction[ClientContext]):
         await interaction.response.send_modal(
             NumberInputModal(
-                title=self.label,
+                title=self.label or "",
                 body="Adjust dice pool ±. Rolls are kept.",
                 do_action=self.on_adjust_dice_confirm,
                 on_after=self.base_view.after_use,
@@ -126,7 +127,7 @@ class AdjustLimitButton(AdjustButton):
     async def callback(self, interaction: Interaction[ClientContext]):
         await interaction.response.send_modal(
             NumberInputModal(
-                title=self.label,
+                title=self.label or "",
                 body="You can set the limit directly here.",
                 do_action=self.on_adjust_limit_confirm,
                 on_after=self.base_view.after_use,
@@ -135,18 +136,16 @@ class AdjustLimitButton(AdjustButton):
             )
         )
 
-class GenericEdgeMenu(ui.LayoutView):
+class GenericEdgeMenu(BaseMenuView):
     def __init__(self, title: str, result_accessor: GenericResultAccessor, original_message_id: int,
                  context: InteractionContext):
-        super().__init__(timeout=None)
+        super().__init__()
         self.result_accessor = result_accessor
         self.original_message_id = original_message_id
         self.title = title
-        self.followup_message: WebhookMessage | None = None
-        self.edge_action_row = None
 
         container = ui.Container(accent_color=0xAAAA44)
-        container.add_item(ui.TextDisplay(self.title))
+        self.add_item(ui.TextDisplay(self.title))
 
         second_chance_button = SecondChanceButton()
         second_chance_button.base_view = self

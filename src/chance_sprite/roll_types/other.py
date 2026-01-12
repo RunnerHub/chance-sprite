@@ -14,17 +14,15 @@ from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
 from ..roller import additive_roll
-from ..rollui.commonui import build_header
-from ..rollui.edge_menu_persist import EdgeMenuButton
+from ..rollui.base_roll_view import BaseRollView
+from ..rollui.roll_view_persist import EdgeMenuButton
 from ..sprite_context import InteractionContext
 
 
-class StartingCashRollView(ui.LayoutView):
+class StartingCashRollView(BaseRollView):
     def __init__(self, roll_result: StartingCashRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
-        container = build_header(EdgeMenuButton(),
-                                 f"{roll_result.lifestyle.label} lifestyle starting cash\n{label}",
-                                 roll_result.lifestyle.color)
+        header_txt = f"{roll_result.lifestyle.label} lifestyle starting cash\n{label}"
+        super().__init__(header_txt, roll_result.lifestyle.color, context)
 
         dice = roll_result.result.render_dice(context)
         total = roll_result.result.total_roll
@@ -32,10 +30,10 @@ class StartingCashRollView(ui.LayoutView):
         dice_line = f"`{roll_result.result.dice}d6`{dice} Total: **{total}** × {roll_result.lifestyle.mult}¥"
         outcome = f"# =¥{nuyen}"
 
-        container.add_item(ui.TextDisplay(dice_line))
-        container.add_item(ui.TextDisplay(outcome))
+        self.add_text(dice_line)
+        self.add_text(outcome)
 
-        self.add_item(container)
+        
 
 
 @dataclass(frozen=True, slots=True)

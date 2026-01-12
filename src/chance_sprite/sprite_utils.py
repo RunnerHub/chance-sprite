@@ -56,6 +56,12 @@ def plural_s(n, s: str = "s"):
     else:
         return s
 
+def sign_int(n):
+    if n >= 0:
+        return "+" + str(n)
+    else:
+        return str(n)
+
 
 def humanize_timedelta(td: timedelta) -> str:
     seconds = int(td.total_seconds())

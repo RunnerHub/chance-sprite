@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import timedelta, datetime, timezone
-from typing import Optional, Annotated
+from typing import Optional, Annotated, override
 
 from boltons.cacheutils import cachedproperty
 from discord import app_commands
@@ -11,21 +11,21 @@ from discord import ui
 
 from chance_sprite.result_types import HitsResult
 from chance_sprite.roller import roll_hits, roll_exploding
+from ..rollui.roll_accessor import RollAccessor
 from ..fungen import Desc, roll_command
 from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
-from ..message_cache.roll_record_base import RollRecordBase
-from ..rollui.commonui import build_header, RollAccessor
-from ..rollui.edge_menu_persist import EdgeMenuButton
+from ..message_cache.roll_record_base import ResistableRoll, RollRecordBase
+from ..rollui.base_roll_view import BaseRollView
+from ..rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from ..rollui.generic_edge_menu import GenericEdgeMenu
 from ..sprite_context import InteractionContext
-from ..sprite_utils import humanize_timedelta, color_by_net_hits
+from ..sprite_utils import humanize_timedelta, color_by_net_hits, plural_s
 
 
-class ThresholdView(ui.LayoutView):
+class ThresholdView(BaseRollView):
     def __init__(self, roll_result: ThresholdRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
-        container = build_header(EdgeMenuButton(), label, color_by_net_hits(roll_result.net_hits))
+        super().__init__(label, color_by_net_hits(roll_result.net_hits), context)
 
         dice = roll_result.result.render_roll(context)
         if roll_result.threshold:
@@ -33,19 +33,21 @@ class ThresholdView(ui.LayoutView):
         glitch = roll_result.result.render_glitch(context)
         if glitch:
             dice += "\n" + glitch
-        container.add_item(ui.TextDisplay(dice))
+        self.add_text(dice)
 
         if roll_result.threshold > 0:
             outcome = "Succeeded!" if roll_result.succeeded else "Failed!"
-            container.add_item(ui.TextDisplay(f"**{outcome}** ({roll_result.net_hits:+d} net)"))
+            self.add_text(f"**{outcome}** ({roll_result.net_hits:+d} net)")
 
-        self.add_item(container)
-
+        if roll_result.resistable:
+            self.add_buttons(EdgeMenuButton(), ResistButton())
+        else:
+            self.add_buttons(EdgeMenuButton())
 
 @message_codec.alias("SimpleRoll")
 @message_codec.alias("ThresholdResult")
 @dataclass(frozen=True)
-class ThresholdRoll(RollRecordBase):
+class ThresholdRoll(ResistableRoll):
     result: HitsResult
     threshold: int = 0
 
@@ -61,15 +63,20 @@ class ThresholdRoll(RollRecordBase):
             return 0
         return self.result.hits_limited - self.threshold
 
+    @override
     def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
         return ThresholdView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
+    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
         result_accessor = RollAccessor[ThresholdRoll](getter=lambda r: r.result,
                                                       setter=lambda r, v: replace(r, result=v))
-        menu = GenericEdgeMenu(f"Edge for {record.label}:", result_accessor, record.message_id, interaction)
-        await interaction.send_as_followup(menu)
+        menu = GenericEdgeMenu(f"Edge for {record.label}:", result_accessor, record.message_id, context)
+        await context.send_as_followup(menu)
+
+    def resistance_target(self) -> int:
+        return self.result.hits_limited
+
 
 
 @roll_command(desc="Roll some d6s, Shadowrun-style.")
@@ -86,28 +93,27 @@ def roll_simple(*,
                 pre_edge: Annotated[
                     bool, Desc("Pre-edge Break the Limit.")]
                 = False,
-                ):
+                resistable: Annotated[
+                    bool, Desc("Can others attempt to resist this roll?")]
+                = False,
+                ) -> ThresholdRoll:
     if pre_edge:
         roll = roll_exploding(dice, gremlins=gremlins)
     else:
         roll = roll_hits(dice, limit=limit, gremlins=gremlins)
-    return ThresholdRoll(result=roll, threshold=threshold)
+    return ThresholdRoll(result=roll, threshold=threshold, resistable=resistable)
 
 
-class ExtendedRollView(ui.LayoutView):
+class ExtendedRollView(BaseRollView):
     def __init__(self, roll_result: ExtendedRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
         accent = 0x88FF88 if roll_result.succeeded else 0xFF8888
-        menu_button = EdgeMenuButton()
-        container = build_header(menu_button, label, accent)
-
-        container.add_item(
-            ui.TextDisplay(
-                f"Extended test: start **{roll_result.start_dice}** dice, threshold **{roll_result.threshold}**, max **{roll_result.max_iters}** roll(s)\n"
+        super().__init__(label, accent, context)
+        
+        self.add_text(
+            f"Extended test: start **{roll_result.start_dice}** dice, threshold **{roll_result.threshold}**, max **{roll_result.max_iters}** roll(s)\n"
             )
-        )
 
-        container.add_item(ui.Separator())
+        self.add_separator()
 
         # Pack iterations into as few TextDisplays as possible to respect the ~30 component limit.
         blocks: list[str] = []
@@ -118,27 +124,11 @@ class ExtendedRollView(ui.LayoutView):
             )
             prev = it.cumulative_hits
 
-        # Split into chunks
-        chunk = ""
-        for b in blocks:
-            candidate = (chunk + "\n" + b).strip() if chunk else b
-            if len(candidate) > 1800:  # keep headroom
-                container.add_item(ui.TextDisplay(chunk))
-                chunk = b
-            else:
-                chunk = candidate
-
-        if chunk:
-            container.add_item(ui.TextDisplay(chunk))
-
-        container.add_item(ui.Separator())
-        container.add_item(
-            ui.TextDisplay(
-                f"Result: **{'Succeeded' if roll_result.succeeded else 'Failed'}** after **{roll_result.iters_used}** interval{"s" if roll_result.iters_used != 1 else ""} with {roll_result.final_hits} total hits (**{roll_result.final_hits - roll_result.threshold}** net)"
-            )
+        self.add_long_text(blocks)
+        self.add_separator()
+        self.add_text(
+            f"Result: **{'Succeeded' if roll_result.succeeded else 'Failed'}** after **{roll_result.iters_used}** interval{plural_s(roll_result.iters_used)} with {roll_result.final_hits} total hit{plural_s(roll_result.final_hits)} (**{roll_result.final_hits - roll_result.threshold}** net)"
         )
-
-        self.add_item(container)
 
 
 @dataclass(frozen=True)
@@ -205,7 +195,7 @@ def roll_extended(*,
         if pool < 1:
             break
 
-        r = roll_hits(pool, limit=limit, gremlins=gremlins)
+        r = roll_hits(pool, limit=limit, gremlins=gremlins or 0)
         cumulative += r.hits_limited
         iterations.append(ExtendedIteration(n=i, roll=r, cumulative_hits=cumulative))
 
@@ -222,31 +212,28 @@ def roll_extended(*,
     )
 
 
-class OpposedRollView(ui.LayoutView):
+class OpposedRollView(BaseRollView):
     def __init__(self, roll_result: OpposedRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
-
-        menu_button = EdgeMenuButton()
-        container = build_header(menu_button, label, color_by_net_hits(roll_result.net_hits))
+        super().__init__(label, color_by_net_hits(roll_result.net_hits), context)
 
         # Initiator block
-        container.add_item(ui.TextDisplay(
-            f"**Initiator:**\n{roll_result.initiator.render_roll_with_glitch(context)}"))
+        self.add_text(f"**Initiator:**\n{roll_result.initiator.render_roll_with_glitch(context)}")
 
-        container.add_item(ui.Separator())
+        self.add_separator()
         # Defender block
-        container.add_item(ui.TextDisplay(
-            f"**Defender:**\n{roll_result.defender.render_roll_with_glitch(context)}"))
+        self.add_text(f"**Defender:**\n{roll_result.defender.render_roll_with_glitch(context)}")
 
         net = roll_result.net_hits
         # Outcome
-        container.add_item(ui.Separator())
+        self.add_separator()
         if net == 0:
-            container.add_item(ui.TextDisplay("Tie; Defender wins. (0 net hits)"))
+            self.add_text("Tie; Defender wins. (0 net hits)")
         else:
-            container.add_item(ui.TextDisplay(f"{roll_result.outcome} with **{net:+d}** net hits"))
+            self.add_text(f"{roll_result.outcome} with **{net:+d}** net hits")
 
-        self.add_item(container)
+        self.add_buttons(EdgeMenuButton())
+
+        
 
 
 @message_codec.alias("OpposedResult")
@@ -307,54 +294,38 @@ def roll_opposed(*,
     return OpposedRoll(initiator=initiator, defender=defender)
 
 
-class AvailabilityRollView(ui.LayoutView):
+class AvailabilityRollView(BaseRollView):
     def __init__(self, roll_result: AvailabilityRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
-        costdetail = label
         if roll_result.base_delivery_time:
             label += f"\n-# Cost: {roll_result.cost}; base delivery time: {humanize_timedelta(roll_result.base_delivery_time)}"
-        menu_button = EdgeMenuButton()
-        container = build_header(menu_button, label, color_by_net_hits(roll_result.net_hits))
+        super().__init__(label, color_by_net_hits(roll_result.net_hits), context)
 
         # Initiator block
-        container.add_item(ui.TextDisplay(
-            f"**Negotiation:**\n{roll_result.initiator.render_roll_with_glitch(context)}"))
+        self.add_text(f"**Negotiation:**\n{roll_result.initiator.render_roll_with_glitch(context)}")
 
-        container.add_item(ui.Separator())
+        self.add_separator()
         # Defender block
-        container.add_item(ui.TextDisplay(
-            f"**Availability:**\n{roll_result.defender.render_roll_with_glitch(context)}"))
+        self.add_text(f"**Availability:**\n{roll_result.defender.render_roll_with_glitch(context)}")
 
         # Outcome
-        container.add_item(ui.Separator())
-        outcome = ""
+        self.add_separator()
+        outcome_string = ""
         if roll_result.net_hits < 0:
-            outcome += f"**Failed** by {abs(roll_result.net_hits)}: item not acquired."
+            outcome_string += f"**Failed** by {abs(roll_result.net_hits)}: item not acquired."
         else:
             if roll_result.net_hits == 0:
-                outcome += f"**Tie**; delivered in double time."
+                outcome_string += f"**Tie**; delivered in double time."
             elif roll_result.net_hits == 1:
-                outcome += "**Success**: delivered in standard time"
+                outcome_string += "**Success**: delivered in standard time"
             else:
-                outcome += f"**Success**: delivered in **1/{roll_result.net_hits}** standard time"
+                outcome_string += f"**Success**: delivered in **1/{roll_result.net_hits}** standard time"
             if roll_result.adjusted_delivery_time:
                 eta = datetime.now(timezone.utc) + roll_result.adjusted_delivery_time
-                outcome += f": {humanize_timedelta(roll_result.adjusted_delivery_time)}\n <t:{int(eta.timestamp())}:f> (<t:{int(eta.timestamp())}:R>)"
+                outcome_string += f": {humanize_timedelta(roll_result.adjusted_delivery_time)}\n <t:{int(eta.timestamp())}:f> (<t:{int(eta.timestamp())}:R>)"
 
-        container.add_item(ui.TextDisplay(outcome))
+        self.add_text(outcome_string)
 
-        @property
-        def outcome(self) -> str:
-            if self.net_hits < 0:
-                return f"Failed: item not acquired"
-            elif self.net_hits == 0:
-                return f"Tie (delivered in double time)"
-            elif self.net_hits == 1:
-                return f"Success: delivered in standard time"
-            else:
-                return f"Success: delivered in 1/{self.net_hits} standard time"
-
-        self.add_item(container)
+        self.add_buttons(EdgeMenuButton())
 
 
 @message_codec.alias("OpposedResult")

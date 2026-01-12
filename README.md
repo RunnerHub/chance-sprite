@@ -11,12 +11,22 @@ Needs a discord_secret.json in ~/.config/chance_sprite
 }
 ```
 
-Currently implemented: simple, extended, opposed, threshold, and spell rolls.
+Currently implemented: 
+- basic
+  - simple (threshold)
+  - extended
+  - opposed
+  - availability
+- magic
+  - spell
+  - create alchemy
+  - summon
+  - bind
+- other
+  - starting cash
 
-WIP:
-- limits (and greyed-out dice)
-- gremlins
 TODO:
-- edge
 - more roll types
+- more complex roll management
 - emoji management
+- allow others to resist/oppose rolls

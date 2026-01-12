@@ -4,7 +4,7 @@ import logging
 from dataclasses import replace
 from datetime import datetime, timedelta
 
-from discord import Interaction, InteractionCallbackResponse, InteractionMessage
+from discord import DMChannel, Interaction, InteractionCallbackResponse, InteractionMessage
 from discord.ext import commands
 from discord.ui.view import LayoutView
 
@@ -12,6 +12,7 @@ from chance_sprite.emojis.emoji_manager import EmojiManager
 from chance_sprite.file_sprite import MessageRecordStore
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import RollRecordBase
+from chance_sprite.rollui.base_roll_view import BaseMenuView, BaseRollView
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class ClientContext(commands.Bot):
     def __init__(self, *, emoji_manager: EmojiManager, message_cache: MessageRecordStore, **kwargs):
         super().__init__(**kwargs)
         self.emoji_manager: EmojiManager = emoji_manager
-        self.message_cache: MessageRecordStore = message_cache
+        self.message_store: MessageRecordStore = message_cache
         self.message_handles: dict[int, InteractionMessage] = dict()
         self.base_command_name = None
 
@@ -29,14 +30,17 @@ class InteractionContext:
     def __init__(self, interaction: Interaction[ClientContext]):
         self.interaction = interaction
         self.emoji_manager = interaction.client.emoji_manager
-        self.message_cache = interaction.client.message_cache
+        self.message_store = interaction.client.message_store
         self.message_handles = dict()
 
     def get_cached_record(self, message_id: int):
-        return self.interaction.client.message_cache[message_id]
+        return self.interaction.client.message_store[message_id]
 
     def cache_message_handle(self, handle: InteractionMessage):
         self.interaction.client.message_handles[handle.id] = handle
+
+    def get_cached_message_handle(self, id: int):
+        return self.interaction.client.message_handles.get(id)
 
     async def update_original(self, old_record: MessageRecord, new_result: RollRecordBase):
         await self.defer_if_needed()
@@ -48,10 +52,10 @@ class InteractionContext:
         # if not context.emoji_manager.loaded:
         #     pass
         try:
-            cached_message_handle = context.message_handles[old_record.message_id]
+            cached_message_handle = self.get_cached_message_handle(old_record.message_id)
             await cached_message_handle.edit(view=view)
             new_record = replace(old_record, roll_result=new_result)
-            context.message_cache.put(new_record)
+            context.message_store.put(new_record)
             log.info("Edited via cached message")
             return new_record
         except Exception as e:
@@ -61,7 +65,7 @@ class InteractionContext:
             # Edit the original message
             await original_message.edit(view=view)
             new_record = replace(old_record, roll_result=new_result)
-            context.message_cache.put(new_record)
+            context.message_store.put(new_record)
             log.info("Edited via partial message")
             return new_record
         except Exception as e:
@@ -79,27 +83,36 @@ class InteractionContext:
         message_id = send_message_response.message_id
         if isinstance(send_message_response.resource, InteractionMessage):
             message: InteractionMessage = send_message_response.resource
-            context.message_handles[message.id] = message
+            self.cache_message_handle(message)
         now = datetime.now()
         expires_at = now + timedelta(days=7)
         try:
-            log.info(
-                f"User [{interaction.user.display_name}] rolled [{result.__class__.__name__}] in [{interaction.channel.name}]")
+            if isinstance(interaction.channel, DMChannel):
+                log.info(
+                    f"User [{interaction.user.display_name}] rolled [{result.__class__.__name__}] in [{interaction.channel.id}]")
+            elif interaction.channel:
+                log.info(
+                    f"User [{interaction.user.display_name}] rolled [{result.__class__.__name__}] in [{interaction.channel.name}]")
+            else :
+                log.info(
+                    f"User [{interaction.user.display_name}] rolled [{result.__class__.__name__}] in [??? NoneChannel ???]")
         except Exception as e:
             log.info(f"Unusual event when logging interaction: {e}")
             log.info(f"Interaction details: {interaction}")
-        record = MessageRecord(
-            message_id=message_id,
-            guild_id=interaction.guild_id,
-            channel_id=interaction.channel_id or 0,
-            owner_id=interaction.user.id,
-            label=label,
-            created_at=int(now.timestamp()),
-            expires_at=int(expires_at.timestamp()),
-            roll_result=result
-        )
-        context.message_cache.put(record)
-        return record
+        
+        if message_id:
+            record = MessageRecord(
+                message_id=message_id,
+                guild_id=interaction.guild_id,
+                channel_id=interaction.channel_id or 0,
+                owner_id=interaction.user.id,
+                label=label,
+                created_at=int(now.timestamp()),
+                expires_at=int(expires_at.timestamp()),
+                roll_result=result
+            )
+            context.message_store.put(record)
+            return record
 
     async def defer_if_needed(self):
         # noinspection PyUnresolvedReferences
@@ -116,13 +129,13 @@ class InteractionContext:
             log.error(f"Couldn't find message on transmitted interaction: {interaction}")
         else:
             message_id = interaction.message.id
-            message_record = context.message_cache[message_id]
+            message_record = context.message_store[message_id]
             label = message_record.label
             result = message_record.roll_result
             await self.transmit_result(label, result)
         await self.defer_if_needed()
 
-    async def send_as_followup(self, menu: LayoutView):
+    async def send_as_followup(self, menu: BaseMenuView):
         followup_message = await self.interaction.followup.send(view=menu, wait=True, ephemeral=True)
         menu.followup_message = followup_message
         # self.followup_message = await interaction.edit_original_response(view=self)

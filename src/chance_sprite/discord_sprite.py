@@ -10,7 +10,7 @@ from discord.ext import commands
 
 from chance_sprite.emojis.emoji_manager import EmojiManager
 from chance_sprite.file_sprite import ConfigFile, RollRecordCacheFile, DatabaseHandle, MessageRecordStore
-from chance_sprite.rollui.edge_menu_persist import EdgeMenuPersist
+from chance_sprite.rollui.roll_view_persist import RollViewPersist
 from chance_sprite.sprite_context import ClientContext
 
 log = logging.getLogger(__name__)
@@ -34,12 +34,12 @@ class DiscordSprite(ClientContext):
             intents=intents,
         )
         old_cache_file = RollRecordCacheFile("message_cache.json")
-        old_cache_file.dump(self.message_cache)
+        old_cache_file.dump(self.message_store)
         self.enable_global_sync = enable_sync
         self.base_command_name = self.config["command_name"]
 
     async def setup_hook(self) -> None:
-        self.add_view(EdgeMenuPersist())
+        self.add_view(RollViewPersist())
         log.info(f"Global sync: {self.enable_global_sync}")
         self.tree.clear_commands(guild=None)
 

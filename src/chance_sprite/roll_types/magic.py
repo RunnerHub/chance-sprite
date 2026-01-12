@@ -11,206 +11,18 @@ from chance_sprite.fungen import Desc
 from chance_sprite.fungen import roll_command
 from chance_sprite.message_cache import message_codec
 from chance_sprite.message_cache.message_record import MessageRecord
-from chance_sprite.message_cache.roll_record_base import RollRecordBase
+from chance_sprite.message_cache.roll_record_base import ResistableRoll, RollRecordBase
 from chance_sprite.result_types import Glitch, HitsResult
 from chance_sprite.roller import roll_hits, roll_exploding
-from chance_sprite.rollui.commonui import build_header, RollAccessor
-from chance_sprite.rollui.edge_menu_persist import EdgeMenuButton
+from chance_sprite.rollui.roll_accessor import RollAccessor
+from chance_sprite.rollui.base_roll_view import BaseRollView
+from chance_sprite.rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from chance_sprite.rollui.generic_edge_menu import GenericEdgeMenu
 from chance_sprite.sprite_context import InteractionContext
+from chance_sprite.sprite_utils import sign_int
 
 log = logging.getLogger(__name__)
 
-
-def _decide_color(roll_result: AlchemyCreateRoll) -> int:
-    """
-    Accent based on drain outcome (because that's the "did you take drain?" part),
-    but still signal critical glitches.
-    """
-    succ = roll_result.potency > 0
-    if roll_result.drain_value <= 0:
-        color = 0x8888FF
-    else:
-        color = 0x88FF88 if succ else 0xFF8888
-
-    # If either roll critically glitches, go red.
-    if roll_result.cast.glitch == Glitch.CRITICAL or roll_result.drain.glitch == Glitch.CRITICAL:
-        return 0xFF0000
-
-    # If any roll glitches, use purple-ish (success) or red-ish (fail)
-    if roll_result.cast.glitch == Glitch.GLITCH or roll_result.drain.glitch == Glitch.GLITCH:
-        return 0xCC44CC if (succ or roll_result.drain_value <= 0) else 0xCC4444
-
-    return color
-
-
-class AlchemyCreateRollView(ui.LayoutView):
-    def __init__(self, roll_result: AlchemyCreateRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
-        container = build_header(EdgeMenuButton(), label + f"\nForce {roll_result.force}",
-                                 _decide_color(roll_result))
-
-        # Spellcasting line: show raw hits and limited hits
-        cast_line = (
-                f"**Alchemy:**\n"
-                + roll_result.cast.render_roll_with_glitch(context)
-                + f"\nvs.\n"
-                + roll_result.resist.render_roll_with_glitch(context)
-        )
-        if roll_result.potency:
-            cast_line += f"\nPotency: **{roll_result.potency}**"
-        else:
-            cast_line += f"\n**Attempt failed!**"
-
-        cast_section = ui.TextDisplay(cast_line)
-        container.add_item(cast_section)
-        container.add_item(ui.Separator())
-
-        # Drain line: threshold-style
-        drain_line = (
-                f"**Drain:** \n"
-                + roll_result.drain.render_roll(context) + f" vs. DV{roll_result.drain_value}"
-                + roll_result.drain.render_glitch(context)
-        )
-        container.add_item(ui.TextDisplay(drain_line))
-
-        # Outcome text (drain)
-        if roll_result.drain_value > 0:
-            outcome = "Resisted Drain!" if roll_result.drain_succeeded else f"Took **{-roll_result.drain_net_hits}** Drain!"
-            container.add_item(ui.TextDisplay(outcome))
-
-        self.add_item(container)
-
-
-class BindingRollView(ui.LayoutView):
-    def __init__(self, roll_result: BindingRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
-        menu_button = EdgeMenuButton()
-        container = build_header(menu_button,
-                                 label + f"\nForce {roll_result.force} | **Binding Cost:** {roll_result.bind_cost} reagents, 1 service",
-                                 roll_result.result_color)
-
-        bind_line = "**Binding:**\n" + roll_result.bind.render_roll_with_glitch(context)
-        container.add_item(ui.TextDisplay(bind_line))
-
-        resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(
-            context)
-        container.add_item(ui.TextDisplay(resist_line))
-
-        services_changed = f"Services: **{roll_result.services_in} → {roll_result.services_out}**"
-        if roll_result.succeeded:
-            container.add_item(ui.TextDisplay(f"Bound! Net hits: **{roll_result.net_hits}**. {services_changed}"))
-        else:
-            container.add_item(ui.TextDisplay(f"Binding failed. {services_changed}"))
-        container.add_item(ui.Separator())
-
-        dv_note = ""
-        if roll_result.drain_adjust != 0:
-            sign = "+" if roll_result.drain_adjust > 0 else ""
-            dv_note = f" (adj {sign}{roll_result.drain_adjust})"
-
-        drain_line = (
-                "**Drain Resistance:**\n"
-                + roll_result.drain.render_roll(context)
-                + f" vs. DV{roll_result.drain_value}{dv_note}"
-                + roll_result.drain.render_glitch(context)
-        )
-        container.add_item(ui.TextDisplay(drain_line))
-
-        if roll_result.drain_taken > 0:
-            container.add_item(ui.TextDisplay(f"Took **{roll_result.drain_taken}** Drain!"))
-        else:
-            container.add_item(ui.TextDisplay("Resisted Drain!"))
-
-        self.add_item(container)
-
-
-class SpellRollView(ui.LayoutView):
-    def __init__(self, roll_result: SpellRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
-        container = build_header(EdgeMenuButton(), label + f"\nForce {roll_result.force}", roll_result.result_color)
-
-        # Spellcasting line: show raw hits and limited hits
-        cast_line = (
-                f"**Spellcasting:**\n"
-                + roll_result.cast.render_roll_with_glitch(context)
-        )
-        container.add_item(ui.TextDisplay(cast_line))
-        container.add_item(ui.Separator())
-
-        # Drain line: threshold-style
-        drain_line = (
-                f"**Drain:** \n"
-                + roll_result.drain.render_roll(context) + f" vs. DV{roll_result.drain_value}"
-                + roll_result.drain.render_glitch(context)
-        )
-        container.add_item(ui.TextDisplay(drain_line))
-
-        # Outcome text (drain)
-        if roll_result.drain_value > 0:
-            outcome = "Resisted Drain!" if roll_result.drain_succeeded else f"Took **{-roll_result.drain_net_hits}** Drain!"
-            container.add_item(ui.TextDisplay(outcome))
-
-        self.add_item(container)
-
-
-class SummonRollView(ui.LayoutView):
-    def __init__(self, roll_result: SummonRoll, label: str, context: InteractionContext):
-        super().__init__(timeout=None)
-        container = build_header(EdgeMenuButton(), label + f"\nForce {roll_result.force}",
-                                 self.result_color(roll_result))
-
-        summon_line = "**Summoning:**\n" + roll_result.summon.render_roll_with_glitch(context)
-        container.add_item(ui.TextDisplay(summon_line))
-
-        resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(context)
-        container.add_item(ui.TextDisplay(resist_line))
-
-        if roll_result.succeeded:
-            container.add_item(ui.TextDisplay(f"Summoned! Services: **{roll_result.net_hits}**"))
-        else:
-            container.add_item(ui.TextDisplay(f"Summoning failed."))
-        container.add_item(ui.Separator())
-
-        dv_note = ""
-        if roll_result.drain_adjust != 0:
-            sign = "+" if roll_result.drain_adjust > 0 else ""
-            dv_note = f" (adj {sign}{roll_result.drain_adjust})"
-
-        drain_line = (
-                "**Drain Resistance:**\n"
-                + roll_result.drain.render_roll(context)
-                + f" vs. DV{roll_result.drain_value}{dv_note}"
-                + roll_result.drain.render_glitch(context)
-        )
-        container.add_item(ui.TextDisplay(drain_line))
-
-        if roll_result.drain_taken > 0:
-            container.add_item(ui.TextDisplay(f"Took **{roll_result.drain_taken}** Drain!"))
-        else:
-            container.add_item(ui.TextDisplay("Resisted Drain!"))
-
-        self.add_item(container)
-
-    @staticmethod
-    def result_color(result: SummonRoll) -> int:
-        if (
-                result.summon.glitch == Glitch.CRITICAL
-                or result.resist.glitch == Glitch.CRITICAL
-                or result.drain.glitch == Glitch.CRITICAL
-        ):
-            return 0xFF0000
-
-        if (
-                result.summon.glitch == Glitch.GLITCH
-                or result.resist.glitch == Glitch.GLITCH
-                or result.drain.glitch == Glitch.GLITCH
-        ):
-            return 0xCC44CC if result.succeeded else 0xCC4444
-
-        if result.succeeded:
-            return 0x88FF88
-        return 0xFF8888 if result.drain_taken > 0 else 0xFFAA66
 
 
 @dataclass(frozen=True)
@@ -258,7 +70,7 @@ class AlchemyCreateRoll(RollRecordBase):
 
 
 @roll_command(desc="Roll to create an alchemical preparation.")
-def roll_alchemy(
+def roll_alchemy_create(
         *,
         force: Annotated[
             app_commands.Range[int, 1, 50], Desc("Force of the alchemical preparation attempt.")],
@@ -289,6 +101,57 @@ def roll_alchemy(
         resist=resist,
         drain=drain,
     )
+
+
+@dataclass(frozen=True)
+class AlchemyActivateRoll(ResistableRoll):
+    # Inputs
+    force: int
+    potency: int
+    practiced: int
+    # Rolls
+    cast: HitsResult
+
+
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return AlchemyActivateRollView(self, label, context)
+
+    @classmethod
+    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
+        pass
+
+    def resistance_target(self) -> int:
+        return self.cast.hits_limited
+
+
+
+
+@roll_command(desc="Roll to activate an existing alchemical preparation.")
+def roll_alchemy_activate(
+        *,
+        force: Annotated[
+            app_commands.Range[int, 1, 50], Desc("Force of the alchemical preparation.")],
+        potency: Annotated[
+            app_commands.Range[int, 1, 99], Desc("Potency of the alchemical preparation.")],
+        practiced: Annotated[
+            app_commands.Range[int, -50, 50], Desc("Any dice bonus from Practiced Alchemist")]
+        = 0,
+        resistable: Annotated[
+            bool, Desc("Whether others may roll to resist this spell.")]
+        = True,
+) -> AlchemyActivateRoll:
+    dice = force + potency + practiced
+    limit = force    
+    cast = roll_hits(dice, limit=limit)
+
+    return AlchemyActivateRoll(
+        force=force,
+        potency=potency,
+        practiced=practiced,
+        cast=cast,
+        resistable=resistable,
+    )
+
 
 
 @message_codec.alias("BindResult")
@@ -404,7 +267,7 @@ def roll_binding(
 
 @message_codec.alias("SpellcastResult")
 @dataclass(frozen=True)
-class SpellRoll(RollRecordBase):
+class SpellRoll(ResistableRoll):
     # Inputs
     force: int
     drain_value: int
@@ -412,6 +275,7 @@ class SpellRoll(RollRecordBase):
     # Rolls
     cast: HitsResult
     drain: HitsResult
+    opposed: HitsResult | None = None
 
     @property
     def drain_succeeded(self) -> Optional[bool]:
@@ -452,16 +316,21 @@ class SpellRoll(RollRecordBase):
         return SpellRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
+    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
         cast_accessor = RollAccessor[SpellRoll](getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v))
         edge_menu1 = GenericEdgeMenu(f"Edge Spellcasting for {record.label}?", cast_accessor, record.message_id,
-                                     interaction)
-        await interaction.send_as_followup(edge_menu1)
+                                     context)
+        await context.send_as_followup(edge_menu1)
 
         drain_accessor = RollAccessor[SpellRoll](getter=lambda r: r.drain,
                                                  setter=lambda r, v: replace(r, drain=v))
-        menu2 = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, interaction)
-        await interaction.send_as_followup(menu2)
+        menu2 = GenericEdgeMenu(f"Edge Drain for {record.label}?", drain_accessor, record.message_id, context)
+        await context.send_as_followup(menu2)
+
+    def resistance_target(self) -> int:
+        return self.cast.hits_limited
+
+
 
 
 @roll_command(desc="Roll to cast a spell. Check the drain code and adjust it accordingly.")
@@ -481,6 +350,9 @@ def roll_spell(
         pre_edge: Annotated[
             bool, Desc("Pre-edge the binding roll.")]
         = False,
+        resistable: Annotated[
+            bool, Desc("Whether others may roll to resist this spell.")]
+        = True,
 ) -> SpellRoll:
     if pre_edge:
         cast = roll_exploding(cast_dice)
@@ -493,6 +365,7 @@ def roll_spell(
         drain_value=force + drain_code,
         cast=cast,
         drain=drain,
+        resistable=resistable,
     )
 
 
@@ -572,3 +445,214 @@ def roll_summon(*,
         resist=resist,
         drain=drain,
     )
+
+def _decide_color(roll_result: AlchemyCreateRoll) -> int:
+    """
+    Accent based on drain outcome (because that's the "did you take drain?" part),
+    but still signal critical glitches.
+    """
+    succ = roll_result.potency > 0
+    if roll_result.drain_value <= 0:
+        color = 0x8888FF
+    else:
+        color = 0x88FF88 if succ else 0xFF8888
+
+    # If either roll critically glitches, go red.
+    if roll_result.cast.glitch == Glitch.CRITICAL or roll_result.drain.glitch == Glitch.CRITICAL:
+        return 0xFF0000
+
+    # If any roll glitches, use purple-ish (success) or red-ish (fail)
+    if roll_result.cast.glitch == Glitch.GLITCH or roll_result.drain.glitch == Glitch.GLITCH:
+        return 0xCC44CC if (succ or roll_result.drain_value <= 0) else 0xCC4444
+
+    return color
+
+
+class AlchemyCreateRollView(BaseRollView):
+    def __init__(self, roll_result: AlchemyCreateRoll, label: str, context: InteractionContext):
+        header_txt = label + f"\nForce {roll_result.force} (DV F{sign_int(roll_result.drain_value - roll_result.force)})"
+        super().__init__(header_txt, _decide_color(roll_result), context)
+
+        # Spellcasting line: show raw hits and limited hits
+        cast_line = (
+                f"**Alchemy:**\n"
+                + roll_result.cast.render_roll_with_glitch(context)
+                + f"\nvs.\n"
+                + roll_result.resist.render_roll_with_glitch(context)
+        )
+        if roll_result.potency:
+            cast_line += f"\nPotency: **{roll_result.potency}** | Force: {roll_result.force}"
+        else:
+            cast_line += f"\n**Attempt failed!**"
+
+        self.add_text(cast_line)
+        self.add_separator()
+
+        # Drain line: threshold-style
+        drain_line = (
+                f"**Drain:** \n"
+                + roll_result.drain.render_roll(context) + f" vs. DV{roll_result.drain_value}"
+                + roll_result.drain.render_glitch(context)
+        )
+        self.add_text(drain_line)
+
+        # Outcome text (drain)
+        if roll_result.drain_value > 0:
+            outcome = "Resisted Drain!" if roll_result.drain_succeeded else f"Took **{-roll_result.drain_net_hits}** Drain!"
+            self.add_text(outcome)
+
+        self.add_buttons(EdgeMenuButton())
+
+class AlchemyActivateRollView(BaseRollView):
+    def __init__(self, roll_result: AlchemyActivateRoll, label: str, context: InteractionContext):
+        header_txt = label + f"\nForce {roll_result.force} | Potency: {roll_result.potency}" + (f" | {sign_int(roll_result.practiced)} (Practiced Alchemist)" if roll_result.practiced != 0 else "")
+        super().__init__(header_txt, 0xCC88CC, context)
+
+        # Spellcasting line: show raw hits and limited hits
+        cast_line = roll_result.cast.render_roll_with_glitch(context)
+        self.add_text(cast_line)
+        if(roll_result.resistable):
+            self.add_buttons(ResistButton())
+
+
+
+class BindingRollView(BaseRollView):
+    def __init__(self, roll_result: BindingRoll, label: str, context: InteractionContext):
+        header_txt = (label
+                      + f"\nForce {roll_result.force}"
+                      + (f" (DV{sign_int(roll_result.drain_adjust)}" if roll_result.drain_adjust != 0 else "")
+                      + f"\n**Binding Cost:** {roll_result.bind_cost} reagents, 1 service"
+                      )
+        super().__init__(header_txt, roll_result.result_color, context)
+
+        bind_line = "**Binding:**\n" + roll_result.bind.render_roll_with_glitch(context)
+        self.add_text(bind_line)
+
+        resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(
+            context)
+        self.add_text(resist_line)
+
+        services_changed = f"Services: **{roll_result.services_in} → {roll_result.services_out}**"
+        if roll_result.succeeded:
+            self.add_text(f"Bound! Net hits: **{roll_result.net_hits}**. {services_changed}")
+        else:
+            self.add_text(f"Binding failed. {services_changed}")
+        self.add_separator()
+
+        dv_note = ""
+        if roll_result.drain_adjust != 0:
+            sign = "+" if roll_result.drain_adjust > 0 else ""
+            dv_note = f" (adj {sign}{roll_result.drain_adjust})"
+
+        drain_line = (
+                "**Drain Resistance:**\n"
+                + roll_result.drain.render_roll(context)
+                + f" vs. DV{roll_result.drain_value}{dv_note}"
+                + roll_result.drain.render_glitch(context)
+        )
+        self.add_text(drain_line)
+
+        if roll_result.drain_taken > 0:
+            self.add_text(f"Took **{roll_result.drain_taken}** Drain!")
+        else:
+            self.add_text("Resisted Drain!")
+
+        self.add_buttons(EdgeMenuButton())
+
+        
+
+
+class SpellRollView(BaseRollView):
+    def __init__(self, roll_result: SpellRoll, label: str, context: InteractionContext):
+        header_txt = label + f"\nForce {roll_result.force} (DV F{sign_int(roll_result.drain_value - roll_result.force)})"
+        super().__init__(header_txt, roll_result.result_color, context)
+
+        # Spellcasting line: show raw hits and limited hits
+        cast_line = (
+                f"**Spellcasting:**\n"
+                + roll_result.cast.render_roll_with_glitch(context)
+        )
+        self.add_text(cast_line)
+        self.add_separator()
+
+        # Drain line: threshold-style
+        drain_line = (
+                f"**Drain:** \n"
+                + roll_result.drain.render_roll(context) + f" vs. DV{roll_result.drain_value}"
+                + roll_result.drain.render_glitch(context)
+        )
+        self.add_text(drain_line)
+
+        # Outcome text (drain)
+        if roll_result.drain_value > 0:
+            outcome = "Resisted Drain!" if roll_result.drain_succeeded else f"Took **{-roll_result.drain_net_hits}** Drain!"
+            self.add_text(outcome)
+        if roll_result.resistable:
+            self.add_buttons(EdgeMenuButton(), ResistButton())
+        else:
+            self.add_buttons(EdgeMenuButton())
+
+        
+
+
+class SummonRollView(BaseRollView):
+    def __init__(self, roll_result: SummonRoll, label: str, context: InteractionContext):
+        header_txt = (label 
+                      + f"\nForce {roll_result.force}"
+                      + (f" (DV{sign_int(roll_result.drain_adjust)}" if roll_result.drain_adjust != 0 else "")
+                      )
+        super().__init__(header_txt, self.result_color(roll_result), context)
+
+        summon_line = "**Summoning:**\n" + roll_result.summon.render_roll_with_glitch(context)
+        self.add_text(summon_line)
+
+        resist_line = f"**Spirit Resistance:**\n" + roll_result.resist.render_roll_with_glitch(context)
+        self.add_text(resist_line)
+
+        if roll_result.succeeded:
+            self.add_text(f"Summoned! Services: **{roll_result.net_hits}**")
+        else:
+            self.add_text(f"Summoning failed.")
+        self.add_separator()
+
+        dv_note = ""
+        if roll_result.drain_adjust != 0:
+            sign = "+" if roll_result.drain_adjust > 0 else ""
+            dv_note = f" (adj {sign}{roll_result.drain_adjust})"
+
+        drain_line = (
+                "**Drain Resistance:**\n"
+                + roll_result.drain.render_roll(context)
+                + f" vs. DV{roll_result.drain_value}{dv_note}"
+                + roll_result.drain.render_glitch(context)
+        )
+        self.add_text(drain_line)
+
+        if roll_result.drain_taken > 0:
+            self.add_text(f"Took **{roll_result.drain_taken}** Drain!")
+        else:
+            self.add_text("Resisted Drain!")
+
+        self.add_buttons(EdgeMenuButton())
+
+        
+
+    @staticmethod
+    def result_color(result: SummonRoll) -> int:
+        if (
+                result.summon.glitch == Glitch.CRITICAL
+                or result.resist.glitch == Glitch.CRITICAL
+                or result.drain.glitch == Glitch.CRITICAL
+        ):
+            return 0xFF0000
+
+        if (
+                result.summon.glitch == Glitch.GLITCH
+                or result.resist.glitch == Glitch.GLITCH
+                or result.drain.glitch == Glitch.GLITCH
+        ):
+            return 0xCC44CC if result.succeeded else 0xCC4444
+
+        if result.succeeded:
+            return 0x88FF88
+        return 0xFF8888 if result.drain_taken > 0 else 0xFFAA66

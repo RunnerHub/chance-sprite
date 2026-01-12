@@ -13,10 +13,18 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, kw_only=True)
 class RollRecordBase(ABC):
     @abstractmethod
-    def build_view(self, label: str, interaction: InteractionContext) -> ui.LayoutView:
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
-    async def send_edge_menu(cls, record, interaction: InteractionContext):
+    async def send_edge_menu(cls, record, context: InteractionContext):
+        raise NotImplementedError
+
+@dataclass(frozen=True, kw_only=True)
+class ResistableRoll(RollRecordBase):
+    resistable: bool = True
+
+    @abstractmethod
+    def resistance_target(self) -> int:
         raise NotImplementedError
