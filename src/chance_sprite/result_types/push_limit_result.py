@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from chance_sprite.result_types import Glitch
 from chance_sprite.result_types.hits_result import HitsResult
 from chance_sprite.sprite_context import InteractionContext
+from chance_sprite.sprite_utils import Glitch
 
 
 @dataclass(frozen=True, kw_only=True)

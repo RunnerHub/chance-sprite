@@ -3,23 +3,22 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
-from typing import Optional, Annotated
+from typing import Annotated, Optional
 
-from discord import ui, app_commands
+from discord import app_commands, ui
 
-from chance_sprite.fungen import Desc
-from chance_sprite.fungen import roll_command
+from chance_sprite.fungen import Desc, roll_command
 from chance_sprite.message_cache import message_codec
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import ResistableRoll, RollRecordBase
-from chance_sprite.result_types import Glitch, HitsResult
-from chance_sprite.roller import roll_hits, roll_exploding
-from chance_sprite.rollui.roll_accessor import RollAccessor
+from chance_sprite.result_types import HitsResult
+from chance_sprite.roller import roll_exploding, roll_hits
 from chance_sprite.rollui.base_roll_view import BaseRollView
-from chance_sprite.rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from chance_sprite.rollui.generic_edge_menu import GenericEdgeMenu
+from chance_sprite.rollui.roll_accessor import RollAccessor
+from chance_sprite.rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from chance_sprite.sprite_context import InteractionContext
-from chance_sprite.sprite_utils import sign_int
+from chance_sprite.sprite_utils import Glitch, sign_int
 
 log = logging.getLogger(__name__)
 

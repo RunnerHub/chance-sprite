@@ -4,9 +4,9 @@ import random
 from dataclasses import dataclass, replace
 
 from chance_sprite.result_types.hits_result import HitsResult
-from . import _default_random, Glitch
+
 from ..sprite_context import InteractionContext
-from ..sprite_utils import limit_mask
+from ..sprite_utils import Glitch, _default_random, limit_mask
 
 
 @dataclass(frozen=True, kw_only=True)

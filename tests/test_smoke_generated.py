@@ -6,20 +6,21 @@ import pkgutil
 import types
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, get_args, get_origin, get_type_hints, cast, Annotated, Union
+from typing import Annotated, Any, Union, cast, get_args, get_origin, get_type_hints
 
+import discord
 import pytest
 from discord import app_commands
 from discord.app_commands.transformers import RangeTransformer
 
-from chance_sprite.emojis.emoji_manager import EmojiManager, RAW_TEXT_EMOJI_PACK
+from chance_sprite.emojis.emoji_manager import RAW_TEXT_EMOJI_PACK, EmojiManager
 from chance_sprite.file_sprite import RollRecordCacheFile
+
+# Import these from your real generator module
+from chance_sprite.fungen import Choices, Desc  # adjust names if different
 from chance_sprite.sprite_context import ClientContext
 
 PACKAGE = "chance_sprite.roll_types"
-
-# Import these from your real generator module
-from chance_sprite.fungen import Desc, Choices  # adjust names if different
 
 
 def iter_roll_modules() -> list[str]:
@@ -170,7 +171,8 @@ def test_all_roll_commands_have_kw_only_and_desc() -> None:
 
         # kw-only enforcement
         bad = [
-            p.name for p in sig.parameters.values()
+            p.name
+            for p in sig.parameters.values()
             if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
         ]
         assert not bad, f"{case.qualname} has non-kw-only params: {bad}"
@@ -182,7 +184,25 @@ def test_all_roll_commands_have_kw_only_and_desc() -> None:
                 continue
             ann = hints.get(pname, None)
             assert ann is not None, f"{case.qualname} missing annotation for {pname!r}"
-            assert has_desc(ann), f"{case.qualname} param {pname!r} missing Desc(...) metadata"
+            assert has_desc(ann), (
+                f"{case.qualname} param {pname!r} missing Desc(...) metadata"
+            )
+
+
+class FakeAvatar:
+    def __init__(self) -> None:
+        self.url = ""
+
+
+class FakeUser:
+    def __init__(self) -> None:
+        self.display_name = ""
+        self.display_avatar = FakeAvatar()
+
+
+class FakeInteraction:
+    def __init__(self) -> None:
+        self.user = FakeUser()
 
 
 class FakeContext:
@@ -193,6 +213,7 @@ class FakeContext:
         self.message_cache = RollRecordCacheFile("message_cache.json")
         self.message_handles = {}  # if your code touches it
         self.base_command_name = None
+        self.interaction = FakeInteraction()
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from enum import Enum
+import random
 from typing import Protocol, TypeGuard, runtime_checkable
 
 import discord
@@ -124,3 +126,12 @@ class PartialMessageable(Protocol):
 
 def has_get_partial_message(ch: object) -> TypeGuard[PartialMessageable]:
     return isinstance(ch, PartialMessageable)
+
+
+class Glitch(Enum):
+    NONE = "none"
+    GLITCH = "glitch"
+    CRITICAL = "critical"
+
+
+_default_random = random.Random()

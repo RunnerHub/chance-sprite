@@ -1,12 +1,13 @@
 # emoji_manager.py
 from __future__ import annotations
 
-import imghdr
 import logging
 from dataclasses import dataclass
 from importlib import resources
+from io import BytesIO
 
 import discord
+from PIL import Image, UnidentifiedImageError
 
 log = logging.getLogger(__name__)
 
@@ -70,8 +71,15 @@ class EmojiManager:
             if not p.is_file():
                 continue
             data = p.read_bytes()
-            if imghdr.what(None, data):
-                yield p.name.rsplit(".", 1)[0], data
+            try:
+                with Image.open(BytesIO(data)) as img:
+                    img.verify()  # validate without decoding
+            except UnidentifiedImageError:
+                continue
+            except Exception:
+                continue  # corrupted or unsupported image
+
+            yield p.name.rsplit(".", 1)[0], data
 
     async def sync_application_emojis(self, client: discord.Client) -> None:
         # 1) Fetch existing app emojis

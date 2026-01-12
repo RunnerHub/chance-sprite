@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from functools import cached_property
 import random
 from dataclasses import dataclass, replace
+from functools import cached_property
 
-from . import Glitch
-from . import _default_random
 from ..sprite_context import InteractionContext
-from ..sprite_utils import limit_mask
+from ..sprite_utils import Glitch, _default_random, limit_mask
 
 
 @dataclass(frozen=True, kw_only=True)

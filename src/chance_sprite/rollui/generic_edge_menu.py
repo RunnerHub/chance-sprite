@@ -3,15 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Callable, override
 
-from discord import ui, Interaction, ButtonStyle
+from discord import ButtonStyle, Interaction, ui
 
-from chance_sprite.result_types import Glitch
 from chance_sprite.result_types.hits_result import HitsResult
-from chance_sprite.roller import second_chance, push_the_limit, close_call
+from chance_sprite.roller import close_call, push_the_limit, second_chance
 from chance_sprite.rollui.base_roll_view import BaseMenuView
+from chance_sprite.rollui.modals import ConfirmModal, NumberInputModal
 from chance_sprite.rollui.roll_accessor import GenericResultAccessor
-from chance_sprite.rollui.modals import NumberInputModal, ConfirmModal
-from chance_sprite.sprite_context import InteractionContext, ClientContext
+from chance_sprite.sprite_context import ClientContext, InteractionContext
+from chance_sprite.sprite_utils import Glitch
 
 log = logging.getLogger(__name__)
 
