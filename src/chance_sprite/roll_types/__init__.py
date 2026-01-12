@@ -23,6 +23,7 @@ for info in pkgutil.iter_modules(__path__):
             globals()[name] = obj
             __all__.append(name)
 
+
 def discover_modules() -> Iterable[ModuleType]:
     """Import every non-private module in this package and yield it."""
     pkg = __name__

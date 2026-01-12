@@ -121,12 +121,14 @@ class DatabaseHandle:
         self.conn.execute("PRAGMA synchronous=FULL;")
 
     def init_table_intkey(self, table_name: str):
-        self.conn.execute(f"""
+        self.conn.execute(
+            f"""
             CREATE TABLE IF NOT EXISTS {table_name} (
               record_id INTEGER PRIMARY KEY,
               payload BLOB NOT NULL
             )
-        """, )
+        """,
+        )
 
     def close(self) -> None:
         self.conn.close()
@@ -248,4 +250,4 @@ class RollRecordCacheFile(CacheFile[int, MessageRecord]):
         log.info(f"dumping {len(self)} items into {record_store}...")
         for k, v in self.data.items():
             record_store.seed(k, v)
-        log.info(f"complete!")
+        log.info("complete!")

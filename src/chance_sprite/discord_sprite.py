@@ -9,15 +9,18 @@ import discord
 from discord.ext import commands
 
 from chance_sprite.emojis.emoji_manager import EmojiManager
-from chance_sprite.file_sprite import ConfigFile, RollRecordCacheFile, DatabaseHandle, MessageRecordStore
+from chance_sprite.file_sprite import (
+    ConfigFile,
+    RollRecordCacheFile,
+    DatabaseHandle,
+    MessageRecordStore,
+)
 from chance_sprite.rollui.roll_view_persist import RollViewPersist
 from chance_sprite.sprite_context import ClientContext
 
 log = logging.getLogger(__name__)
 
-EXTENSIONS: tuple[str, ...] = (
-    "chance_sprite.rolld6_commands",
-)
+EXTENSIONS: tuple[str, ...] = ("chance_sprite.rolld6_commands",)
 
 
 class DiscordSprite(ClientContext):
@@ -56,7 +59,9 @@ class DiscordSprite(ClientContext):
 
         # Fast sync (for testing mainly, causes double command registration if command name matches)
         log.info("Trying fast sync")
-        guilds = self.config["fastpush_guilds"] if "fastpush_guilds" in self.config else None
+        guilds = (
+            self.config["fastpush_guilds"] if "fastpush_guilds" in self.config else None
+        )
         if guilds:
             for guild_id in self.config["fastpush_guilds"]:
                 try:
@@ -65,9 +70,9 @@ class DiscordSprite(ClientContext):
                     self.tree.copy_global_to(guild=guild)
                     # self.tree.clear_commands(guild=guild)
                     await self.tree.sync(guild=guild)
-                    log.info(f"done.")
+                    log.info("done.")
                 except Exception as e:
-                    log.info(f"errored: %s", e)
+                    log.info("errored: %s", e)
 
     async def on_ready(self) -> None:
         if self.user:
@@ -77,7 +82,9 @@ class DiscordSprite(ClientContext):
         try:
             username = self.config["username"]
             if self.user.name != username:
-                log.info(f"attempting to change username from {self.user.name} to {username}")
+                log.info(
+                    f"attempting to change username from {self.user.name} to {username}"
+                )
                 await self.user.edit(username=username)
         except Exception as e:
-            log.info(f"caught exception: %s", e)
+            log.info("caught exception: %s", e)

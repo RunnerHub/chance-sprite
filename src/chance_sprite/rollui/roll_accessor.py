@@ -11,6 +11,7 @@ class GenericResultAccessor[R: RollRecordBase](ABC):
     @abstractmethod
     def get(self, record: MessageRecord[R]) -> HitsResult:
         pass
+
     @abstractmethod
     def update(self, record: MessageRecord[R], result: HitsResult) -> R:
         pass
@@ -18,9 +19,9 @@ class GenericResultAccessor[R: RollRecordBase](ABC):
 
 class RollAccessor[R: RollRecordBase](GenericResultAccessor):
     def __init__(
-            self,
-            getter: Callable[[R], HitsResult],
-            setter: Callable[[R, HitsResult], R],
+        self,
+        getter: Callable[[R], HitsResult],
+        setter: Callable[[R, HitsResult], R],
     ):
         self._get = getter
         self._set = setter

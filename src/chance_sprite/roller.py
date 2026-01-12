@@ -4,18 +4,36 @@ import random
 
 from msgspec import to_builtins
 
-from chance_sprite.result_types import HitsResult, BreakTheLimitHitsResult, SecondChanceHitsResult, \
-    PushTheLimitHitsResult, CloseCallResult, AdditiveResult
+from chance_sprite.result_types import (
+    HitsResult,
+    BreakTheLimitHitsResult,
+    SecondChanceHitsResult,
+    PushTheLimitHitsResult,
+    CloseCallResult,
+    AdditiveResult,
+)
 
 _default_random = random.Random()
 
-def roll_hits(dice: int, *, limit: int = 0, gremlins: int = 0, rng: random.Random = _default_random) -> HitsResult:
+
+def roll_hits(
+    dice: int,
+    *,
+    limit: int = 0,
+    gremlins: int = 0,
+    rng: random.Random = _default_random,
+) -> HitsResult:
     rolls = tuple(rng.randint(1, 6) for _ in range(dice))
     return HitsResult(original_dice=dice, rolls=rolls, limit=limit, gremlins=gremlins)
 
 
-def roll_exploding(dice: int, *, limit: int = 0, gremlins: int = 0,
-                   rng: random.Random = _default_random) -> BreakTheLimitHitsResult:
+def roll_exploding(
+    dice: int,
+    *,
+    limit: int = 0,
+    gremlins: int = 0,
+    rng: random.Random = _default_random,
+) -> BreakTheLimitHitsResult:
     rolls = tuple(rng.randint(1, 6) for _ in range(dice))
     exploded_dice = []
     sixes = sum(1 for r in rolls if r == 6)
@@ -25,14 +43,23 @@ def roll_exploding(dice: int, *, limit: int = 0, gremlins: int = 0,
         sixes = sum(1 for r in rerolls if r == 6)
         if sixes == 0:
             break
-    return BreakTheLimitHitsResult(original_dice=dice, rolls=tuple(rolls), limit=limit, gremlins=gremlins,
-                                   exploded_dice=tuple(exploded_dice))
+    return BreakTheLimitHitsResult(
+        original_dice=dice,
+        rolls=tuple(rolls),
+        limit=limit,
+        gremlins=gremlins,
+        exploded_dice=tuple(exploded_dice),
+    )
 
 
 def second_chance(hits_result: HitsResult, rng: random.Random = _default_random):
-    rerolls = tuple(rng.randint(1, 6) for _ in range(hits_result.dice - hits_result.dice_hits))
+    rerolls = tuple(
+        rng.randint(1, 6) for _ in range(hits_result.dice - hits_result.dice_hits)
+    )
     new_hits = sum(1 for r in rerolls if r in (5, 6))
-    return SecondChanceHitsResult(**to_builtins(hits_result), rerolled_dice=rerolls, rerolled_hits=new_hits)
+    return SecondChanceHitsResult(
+        **to_builtins(hits_result), rerolled_dice=rerolls, rerolled_hits=new_hits
+    )
 
 
 def push_the_limit(hits_result, edge: int, rng: random.Random = _default_random):
@@ -47,8 +74,11 @@ def push_the_limit(hits_result, edge: int, rng: random.Random = _default_random)
         if sixes == 0:
             break
 
-    return PushTheLimitHitsResult(**to_builtins(hits_result), exploded_dice=tuple(explosion_iterations),
-                                  rerolled_hits=total_hits)
+    return PushTheLimitHitsResult(
+        **to_builtins(hits_result),
+        exploded_dice=tuple(explosion_iterations),
+        rerolled_hits=total_hits,
+    )
 
 
 def close_call(hits_result: HitsResult):

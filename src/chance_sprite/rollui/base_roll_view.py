@@ -2,28 +2,36 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 
-from discord import MediaGalleryItem, WebhookMessage, ui
+from discord import WebhookMessage, ui
 
 if TYPE_CHECKING:
     from chance_sprite.sprite_context import InteractionContext
+
 
 class BaseView(ui.LayoutView):
     def __init__(self, *, timeout: float | None = None):
         super().__init__(timeout=timeout)
 
+
 class BaseRollView(BaseView):
-    def __init__(self, label: str, accent_color: int, context: InteractionContext) -> None:
+    def __init__(
+        self, label: str, accent_color: int, context: InteractionContext
+    ) -> None:
         super().__init__(timeout=None)
         if not label.strip():
             label = "(no label)"
         header_txt = ui.TextDisplay(
-            f"### {context.interaction.user.display_name}\n"
-            f"{label.strip()}"
+            f"### {context.interaction.user.display_name}\n{label.strip()}"
         )
-        header_section = ui.Section(header_txt, accessory= ui.Thumbnail(context.interaction.user.display_avatar.url))
-        self.container = ui.Container(header_section, ui.Separator(), accent_color = accent_color)
+        header_section = ui.Section(
+            header_txt,
+            accessory=ui.Thumbnail(context.interaction.user.display_avatar.url),
+        )
+        self.container = ui.Container(
+            header_section, ui.Separator(), accent_color=accent_color
+        )
         self.add_item(self.container)
-    
+
     def add_text(self, txt: str):
         self.container.add_item(ui.TextDisplay(txt))
 
@@ -48,8 +56,6 @@ class BaseRollView(BaseView):
         self.add_separator()
         button_row = ui.ActionRow(*buttons)
         self.container.add_item(button_row)
-
-
 
 
 class BaseMenuView(BaseView):

@@ -21,6 +21,7 @@ class RollRecordBase(ABC):
     async def send_edge_menu(cls, record, context: InteractionContext):
         raise NotImplementedError
 
+
 @dataclass(frozen=True, kw_only=True)
 class ResistableRoll(RollRecordBase):
     resistable: bool = True

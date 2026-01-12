@@ -15,6 +15,7 @@ class MessageCodec:
 
     def build_registry_default(self):
         from .. import result_types, roll_types, message_cache, rollui, emojis
+
         self.build_registry([result_types, roll_types, message_cache, rollui, emojis])
 
     def build_registry(self, packages: list[ModuleType]):
@@ -38,12 +39,14 @@ class MessageCodec:
             self.registry[tag] = cls
             setattr(cls, "__tag__", tag)
             return cls
+
         return deco
 
     def alias(self, tag: str):
         def deco(cls: type):
             self.registry[tag] = cls
             return cls
+
         return deco
 
     def decode_with_hint(self, value, hint):

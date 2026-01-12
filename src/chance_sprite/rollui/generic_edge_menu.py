@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Callable, override
 
-from discord import ui, WebhookMessage, Interaction, ButtonStyle
+from discord import ui, Interaction, ButtonStyle
 
 from chance_sprite.result_types import Glitch
 from chance_sprite.result_types.hits_result import HitsResult
@@ -25,7 +25,6 @@ class EdgeButton(ui.Button):
     def disable_edge_buttons(self):
         if self.base_view:
             self.base_view.disable_edge_buttons()
-
 
 
 class SecondChanceButton(EdgeButton):
@@ -52,7 +51,9 @@ class PushLimitButton(EdgeButton):
     def __init__(self):
         super().__init__(label="Push the Limit")
 
-    async def on_push_limit_confirm(self, interaction: Interaction[ClientContext], edge: int) -> None:
+    async def on_push_limit_confirm(
+        self, interaction: Interaction[ClientContext], edge: int
+    ) -> None:
         await self.base_view.handle_case(lambda r: push_the_limit(r, edge), interaction)
         self.disable_edge_buttons()
 
@@ -72,7 +73,9 @@ class CloseCallButton(EdgeButton):
     def __init__(self):
         super().__init__(label="Close Call")
 
-    async def on_close_call_confirm(self, interaction: Interaction[ClientContext]) -> None:
+    async def on_close_call_confirm(
+        self, interaction: Interaction[ClientContext]
+    ) -> None:
         await self.base_view.handle_case(lambda r: close_call(r), interaction)
         self.disable_edge_buttons()
 
@@ -99,7 +102,9 @@ class AdjustDiceButton(AdjustButton):
     def __init__(self):
         super().__init__(label="Adjust Dice")
 
-    async def on_adjust_dice_confirm(self, interaction: Interaction[ClientContext], dice: int) -> None:
+    async def on_adjust_dice_confirm(
+        self, interaction: Interaction[ClientContext], dice: int
+    ) -> None:
         await self.base_view.handle_case(lambda r: r.adjust_dice(dice), interaction)
 
     @override
@@ -120,7 +125,9 @@ class AdjustLimitButton(AdjustButton):
     def __init__(self):
         super().__init__(label="Adjust Limit")
 
-    async def on_adjust_limit_confirm(self, interaction: Interaction[ClientContext], limit: int) -> None:
+    async def on_adjust_limit_confirm(
+        self, interaction: Interaction[ClientContext], limit: int
+    ) -> None:
         await self.base_view.handle_case(lambda r: r.adjust_limit(limit), interaction)
 
     @override
@@ -136,9 +143,15 @@ class AdjustLimitButton(AdjustButton):
             )
         )
 
+
 class GenericEdgeMenu(BaseMenuView):
-    def __init__(self, title: str, result_accessor: GenericResultAccessor, original_message_id: int,
-                 context: InteractionContext):
+    def __init__(
+        self,
+        title: str,
+        result_accessor: GenericResultAccessor,
+        original_message_id: int,
+        context: InteractionContext,
+    ):
         super().__init__()
         self.result_accessor = result_accessor
         self.original_message_id = original_message_id
@@ -154,14 +167,16 @@ class GenericEdgeMenu(BaseMenuView):
         close_call_button = CloseCallButton()
         close_call_button.base_view = self
 
-        self.edge_action_row = ui.ActionRow(second_chance_button, push_limit_button, close_call_button)
+        self.edge_action_row = ui.ActionRow(
+            second_chance_button, push_limit_button, close_call_button
+        )
         container.add_item(self.edge_action_row)
 
         original_message = context.get_cached_record(self.original_message_id)
         result = self.result_accessor.get(original_message)
 
         # Already Edged
-        if not type(result) is HitsResult:
+        if type(result) is not HitsResult:
             self.disable_edge_buttons()
 
         # Limit already hit
@@ -186,7 +201,11 @@ class GenericEdgeMenu(BaseMenuView):
 
         self.add_item(container)
 
-    async def handle_case(self, mutate: Callable[[HitsResult], HitsResult], interaction: Interaction[ClientContext]):
+    async def handle_case(
+        self,
+        mutate: Callable[[HitsResult], HitsResult],
+        interaction: Interaction[ClientContext],
+    ):
         context = InteractionContext(interaction)
         original_message = context.get_cached_record(self.original_message_id)
         if not original_message.owner_id == context.interaction.user.id:
@@ -194,7 +213,7 @@ class GenericEdgeMenu(BaseMenuView):
         old_result = self.result_accessor.get(original_message)
         new_result = self.result_accessor.update(original_message, mutate(old_result))
         await context.update_original(original_message, new_result)
-        log.info(f"original message updated.")
+        log.info("original message updated.")
 
     async def on_dismiss_button(self, interaction: Interaction[ClientContext]):
         if self.followup_message:

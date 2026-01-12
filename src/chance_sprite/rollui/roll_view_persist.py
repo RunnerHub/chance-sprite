@@ -34,18 +34,24 @@ class EdgeMenuButton(ui.Button):
         await interaction.response.defer(ephemeral=True)
         msg = interaction.message
         if msg is None:
-            await interaction.followup.send("Couldn't access the clicked message.", ephemeral=True)
+            await interaction.followup.send(
+                "Couldn't access the clicked message.", ephemeral=True
+            )
             return
 
         message_record = interaction.client.message_store[msg.id]
         if message_record is None:
             await interaction.followup.send(
-                "Couldn't find that roll in the bot's database. Could be a bug, or maybe it expired?", ephemeral=True)
+                "Couldn't find that roll in the bot's database. Could be a bug, or maybe it expired?",
+                ephemeral=True,
+            )
             return
 
         user = interaction.user
         if user.id != message_record.owner_id:
-            await interaction.followup.send("You are not the initiator of that message.", ephemeral=True)
+            await interaction.followup.send(
+                "You are not the initiator of that message.", ephemeral=True
+            )
             return
         interaction_message = await interaction.original_response()
         context.cache_message_handle(interaction_message)
@@ -59,21 +65,24 @@ class ResistButton(ui.Button):
         self.original_post: InteractionMessage | None = None
         self.custom_id = "resist_menu"
         self.style = ButtonStyle.primary
-        
+
     @override
     async def callback(self, interaction: Interaction[ClientContext]):
         context = InteractionContext(interaction)
         msg = interaction.message
         if msg is None:
-            await interaction.followup.send("Couldn't access the clicked message.", ephemeral=True)
+            await interaction.followup.send(
+                "Couldn't access the clicked message.", ephemeral=True
+            )
             return
 
         message_record = interaction.client.message_store[msg.id]
         if message_record is None:
             await interaction.followup.send(
-                "Couldn't find that roll in the bot's database. Could be a bug, or maybe it expired?", ephemeral=True)
+                "Couldn't find that roll in the bot's database. Could be a bug, or maybe it expired?",
+                ephemeral=True,
+            )
             return
         await interaction.response.send_modal(ResistModal(message_record))
         interaction_message = await interaction.original_response()
         context.cache_message_handle(interaction_message)
-

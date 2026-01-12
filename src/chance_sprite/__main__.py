@@ -21,6 +21,7 @@ def main(sync) -> None:
     bot = DiscordSprite(enable_sync=sync)
     bot.run(token)
 
+
 if __name__ == "__main__":
     # Set up logging from env
     level = os.getenv("LOG_LEVEL", "INFO").upper()

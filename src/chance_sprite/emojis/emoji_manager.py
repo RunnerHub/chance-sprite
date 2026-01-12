@@ -25,6 +25,7 @@ UNICODE_PUSHLIMIT = "🔥💥⚡⬆️"
 UNICODE_EXPLODE = "💥🎇"
 UNICODE_GLITCH = "⚠❗️🌀💀☠️🛑"
 
+
 @dataclass(frozen=True)
 class EmojiPack:
     d6: list[str]
@@ -40,6 +41,7 @@ class EmojiPack:
     glitch: str
     critical_glitch: str
 
+
 RAW_TEXT_EMOJI_PACK: EmojiPack = EmojiPack(
     d6=["①", "②", "③", "④", "❺", "❻"],
     d6_ex=["①", "②", "③", "④", "❺", "❻"],
@@ -52,8 +54,9 @@ RAW_TEXT_EMOJI_PACK: EmojiPack = EmojiPack(
     btl="💥",
     close_call="🛡️",
     glitch="⚠",
-    critical_glitch="🛑"
+    critical_glitch="🛑",
 )
+
 
 class EmojiManager:
     def __init__(self, resource: str) -> None:
@@ -100,13 +103,18 @@ class EmojiManager:
             existing_by_name = {e.name: e for e in existing}
 
         self.by_name = existing_by_name
-        log.info("Emoji sync complete. Uploaded: %d. Total now: %d", uploaded, len(self.by_name))
+        log.info(
+            "Emoji sync complete. Uploaded: %d. Total now: %d",
+            uploaded,
+            len(self.by_name),
+        )
 
     def build_packs(self) -> EmojiPack:
         """
         Define your packs by emoji *names*, then resolve to "<:name:id>" strings.
         Fail fast if a required emoji is missing.
         """
+
         def req(name: str) -> str:
             e = self.by_name.get(name)
             if not e:
@@ -131,7 +139,7 @@ class EmojiManager:
             btl="💥",
             close_call="🛡️",
             glitch="glitch",
-            critical_glitch="critglitch"
+            critical_glitch="critglitch",
         )
         self.packs = packs
         return packs

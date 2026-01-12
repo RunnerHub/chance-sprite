@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Protocol
+from typing import Protocol, TypeGuard, runtime_checkable
+
+import discord
 
 log = logging.getLogger(__name__)
 
@@ -11,9 +13,12 @@ log = logging.getLogger(__name__)
 class HasNetHits(Protocol):
     net_hits: int
 
+
 def normalize_key(raw_text: str) -> str:
     # Casefold + remove separators, so "pre-edge" matches "preedge"
-    return "".join(character for character in raw_text.casefold().strip() if character.isalnum())
+    return "".join(
+        character for character in raw_text.casefold().strip() if character.isalnum()
+    )
 
 
 def levenshtein_distance(left: str, right: str) -> int:
@@ -55,6 +60,7 @@ def plural_s(n, s: str = "s"):
         return ""
     else:
         return s
+
 
 def sign_int(n):
     if n >= 0:
@@ -103,9 +109,18 @@ def limit_mask(limit, rolls):
     num_chosen = 0
     mask = [False for _ in rolls]
     for value in [6, 5, 4, 3, 2, 1]:
-        for (i, el) in enumerate(rolls):
+        for i, el in enumerate(rolls):
             if el == value:
                 mask[i] = True
                 num_chosen += 1
                 if num_chosen >= limit:
                     return mask
+
+
+@runtime_checkable
+class PartialMessageable(Protocol):
+    def get_partial_message(self, message_id: int) -> discord.PartialMessage: ...
+
+
+def has_get_partial_message(ch: object) -> TypeGuard[PartialMessageable]:
+    return isinstance(ch, PartialMessageable)

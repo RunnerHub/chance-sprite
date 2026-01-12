@@ -34,12 +34,12 @@ class BreakTheLimitHitsResult(HitsResult):
     @cached_property
     def rerolled_hits(self):
         rerolled_hits = 0
-        for (count, line) in zip(self.counted_explosions, self.exploded_dice):
+        for count, line in zip(self.counted_explosions, self.exploded_dice):
             rerolled_hits += sum(1 for r in line[:count] if r in (5, 6))
         return rerolled_hits
 
     @cached_property
-    def dice_hits(self):
+    def dice_hits(self) -> int:
         base_hits = sum(1 for r in self.counted_rolls if r in (5, 6))
         rerolled_hits = self.rerolled_hits
         return base_hits + rerolled_hits
@@ -69,7 +69,11 @@ class BreakTheLimitHitsResult(HitsResult):
 
     def choose_emojis(self, context: InteractionContext):
         packs = context.emoji_manager.packs
-        chosen_emojis = packs.d6_ex if (self.glitch == Glitch.NONE) else context.emoji_manager.packs.d6_ex_glitch
+        chosen_emojis = (
+            packs.d6_ex
+            if (self.glitch == Glitch.NONE)
+            else context.emoji_manager.packs.d6_ex_glitch
+        )
         limited_emojis = chosen_emojis
         return chosen_emojis, limited_emojis
 
@@ -79,8 +83,11 @@ class BreakTheLimitHitsResult(HitsResult):
         line += self.render_limited_hits()
         for roll in self.exploded_dice:
             line += f"\n`+`{context.emoji_manager.packs.btl}"
-            line += f"" + "".join(
-                chosen_emojis[x - 1] for x in roll) + f" **{sum(1 for r in roll if r in (5, 6))}** hits "
+            line += (
+                ""
+                + "".join(chosen_emojis[x - 1] for x in roll)
+                + f" **{sum(1 for r in roll if r in (5, 6))}** hits "
+            )
         line += f"\n**{self.hits_limited}** Total Hits"
         return line
 
@@ -105,4 +112,9 @@ class BreakTheLimitHitsResult(HitsResult):
             )
             new_exploded_dice = tuple(a + b for a, b in pairs)
             new_rolls = self.rolls + tuple(additional_rolls)
-        return replace(self, rolls=new_rolls, dice_adjustment=new_dice_adjustment, exploded_dice=new_exploded_dice)
+        return replace(
+            self,
+            rolls=new_rolls,
+            dice_adjustment=new_dice_adjustment,
+            exploded_dice=new_exploded_dice,
+        )

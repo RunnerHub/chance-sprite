@@ -12,73 +12,6 @@ log = logging.getLogger(__name__)
 ValueKind = Literal["flag", "int"]
 
 
-#
-# _magic_commands: list[tuple[str, str]] = [
-#     ("Cast a Spell", SpellRoll.__name__),
-#     ("Create Alchemical Preparation", AlchemyCreateRoll.__name__),
-#     ("Summon a Spirit", SummonRoll.__name__),
-#     ("Bind a Spirit", BindingRoll.__name__),
-# ]
-#
-# _LIMIT_MODIFIER = ArgSpec("limit_modifier", "int", aliases=("mod_limit",), suggested_values=(-1, 1, 5, 6, 7))
-# _LIMIT_OVERRIDE = ArgSpec("limit_override", "int", aliases=("override_limit",), suggested_values=(3, 4, 5, 6, 12))
-# _PRE_EDGE = ArgSpec("pre-edge", "flag", aliases=("preedge", "pre_edge"))
-# _SERVICES = ArgSpec("services", "int", aliases=(), suggested_values=(1, 2, 3, 4, 5))
-# _GREMLINS = ArgSpec("gremlins", "int", aliases=(), suggested_values=(1, 2, 3, 4))
-# _DRAIN_MODIFIER = ArgSpec("drain_modifier", "int", aliases=tuple("dv_mod"), suggested_values=(-3, -1, 0, 3))
-#
-# BINDING_REQUIRED = _SERVICES
-# BINDING_OPTIONAL = _LIMIT_OVERRIDE, _LIMIT_MODIFIER, _DRAIN_MODIFIER
-# SPELL_REQUIRED = _DRAIN_MODIFIER
-# SPELL_OPTIONAL = _LIMIT_OVERRIDE, _LIMIT_MODIFIER
-#
-# ALL_MAGIC_EXTRA_SPECS = _LIMIT_OVERRIDE, _LIMIT_MODIFIER, _DRAIN_MODIFIER
-#
-
-
-# @dataclass(frozen=True)
-# class CommandParamSpec:
-#     name: str
-#     desc: str
-#     range: app_commands.Range | app_commands.Choice | app_commands.Transform
-#
-# LABEL_PARAM = CommandParamSpec(name="label", desc="A label to describe the roll.", range=app_commands.Range[str, 3, 100])
-# FORCE_PARAM = CommandParamSpec(name="force", desc="Force of the effect.", range=app_commands.Range[int, 1, 50])
-# ACTION_PARAM = CommandParamSpec(name="action_dice", desc="Dice pool for the action.", range=app_commands.Range[int, 1, 99])
-# DRAIN_DICE_PARAM = CommandParamSpec(name="drain_dice", desc="Dice pool for resisting drain after the action.", range=app_commands.Range[int, 1, 99])
-# SERVICES_PARAM = CommandParamSpec(name="services_in", desc="How many services the spirit has before the binding attempt.", range=app_commands.Range[int, 1, 99])
-
-#
-# async def handle_magic_autocomplete(interaction: Interaction[ClientContext], current: str) -> list[str]:
-#     action_name = getattr(interaction.namespace, "action", None)
-#
-#     match action_name:
-#         case BindingRoll.__name__:
-#             extra_specs = BINDING_REQUIRED + BINDING_OPTIONAL
-#         case _:
-#             extra_specs = ALL_MAGIC_EXTRA_SPECS
-#
-#     suggestions = build_args_autocomplete_suggestions(
-#         current,
-#         extra_specs,
-#         maximum_suggestions=25,
-#     )
-#     return [app_commands.Choice(name=text or "(empty)", value=text) for text in suggestions]
-#
-#
-# def parse_extras_list(extras: list[str]) -> dict[str, str]:
-#     result: dict[str, str] = {}
-#
-#     for item in extras:
-#         key, sep, value = item.partition("=")
-#         key = key.strip()
-#         if not key:
-#             continue
-#
-#         result[key] = value.strip() if sep else ""
-#
-#     return result
-
 @dataclass(frozen=True)
 class ArgSpec:
     canonical_key: str
@@ -105,8 +38,8 @@ def build_spec_index(arg_specs: Sequence[ArgSpec]) -> dict[str, ArgSpec]:
 
 
 def best_levenshtein_match(
-        normalized_input_key: str,
-        spec_index: dict[str, ArgSpec],
+    normalized_input_key: str,
+    spec_index: dict[str, ArgSpec],
 ) -> tuple[ArgSpec, int, int] | None:
     # returns (best_spec, best_distance, second_best_distance)
     scored_candidates: dict[ArgSpec, int] = {}
@@ -132,15 +65,16 @@ def best_levenshtein_match(
             second_best_distance = distance
 
     # best_spec is not None here because dict is non-empty
+    assert best_spec is not None
     return best_spec, best_distance, second_best_distance
 
 
 def find_best_matching_spec(
-        raw_key_text: str,
-        extra_specs: Sequence[ArgSpec],
-        spec_index: dict[str, ArgSpec],
-        *,
-        max_levenshtein: int = 2,
+    raw_key_text: str,
+    extra_specs: Sequence[ArgSpec],
+    spec_index: dict[str, ArgSpec],
+    *,
+    max_levenshtein: int = 2,
 ) -> ArgSpec | None:
     normalized_input_key = normalize_key(raw_key_text)
     if not normalized_input_key:
@@ -170,7 +104,10 @@ def find_best_matching_spec(
     # 3) Levenshtein distance (for typos)
     if len(normalized_input_key) <= max_levenshtein:
         return None
-    (best_spec, best_distance, second_best_distance) = best_levenshtein_match(normalized_input_key, spec_index)
+    result = best_levenshtein_match(normalized_input_key, spec_index)
+    if result is None:
+        raise AssertionError("unreachable: spec_index was non-empty")
+    (best_spec, best_distance, second_best_distance) = result
 
     # require: close match and a margin so it is not ambiguous
     if best_distance <= max_levenshtein and (second_best_distance - best_distance) >= 2:
@@ -190,10 +127,7 @@ def format_suggestion(arg_spec: ArgSpec, value_text: str | None) -> str:
 
 
 def build_args_autocomplete_suggestions(
-        current_text: str,
-        arg_specs: Sequence[ArgSpec],
-        *,
-        maximum_suggestions: int = 25
+    current_text: str, arg_specs: Sequence[ArgSpec], *, maximum_suggestions: int = 25
 ) -> list[str]:
     spec_index = build_spec_index(arg_specs)
     token_texts = split_argstr(current_text)
@@ -203,21 +137,23 @@ def build_args_autocomplete_suggestions(
     parsed_values_by_key: dict[str, str | None] = {}
     for token_text in token_texts:
         raw_key_text, raw_value_text = parse_token_into_key_value(token_text)
-        matching_spec = find_best_matching_spec(
-            raw_key_text,
-            arg_specs,
-            spec_index
-        )
+        matching_spec = find_best_matching_spec(raw_key_text, arg_specs, spec_index)
         if matching_spec is None:
             continue
-        parsed_values_by_key[matching_spec.canonical_key] = raw_value_text if matching_spec.kind == "int" else None
+        parsed_values_by_key[matching_spec.canonical_key] = (
+            raw_value_text if matching_spec.kind == "int" else None
+        )
 
     def render_current_normalized_tokens() -> list[str]:
         rendered_tokens: list[str] = []
         for extra_spec in arg_specs:
             if extra_spec.canonical_key not in parsed_values_by_key:
                 continue
-            rendered_tokens.append(format_suggestion(extra_spec, parsed_values_by_key[extra_spec.canonical_key]))
+            rendered_tokens.append(
+                format_suggestion(
+                    extra_spec, parsed_values_by_key[extra_spec.canonical_key]
+                )
+            )
         return rendered_tokens
 
     def join_tokens(rendered_tokens: list[str]) -> str:
@@ -234,15 +170,17 @@ def build_args_autocomplete_suggestions(
     # - it matches an int spec
     # - and the value is missing (no '=' OR 'key=' with empty value OR 'key,' with no value)
     if active_token_text:
-        active_raw_key_text, active_raw_value_text = parse_token_into_key_value(active_token_text)
+        active_raw_key_text, active_raw_value_text = parse_token_into_key_value(
+            active_token_text
+        )
         active_spec = find_best_matching_spec(
-            active_raw_key_text,
-            arg_specs,
-            spec_index
+            active_raw_key_text, arg_specs, spec_index
         )
 
         if active_spec and active_spec.kind == "int":
-            is_value_missing = (active_raw_value_text is None) or (active_raw_value_text == "")
+            is_value_missing = (active_raw_value_text is None) or (
+                active_raw_value_text == ""
+            )
             if is_value_missing:
                 for suggested_value in active_spec.suggested_values:
                     candidate_values = dict(parsed_values_by_key)
@@ -253,7 +191,10 @@ def build_args_autocomplete_suggestions(
                         if extra_spec.canonical_key not in candidate_values:
                             continue
                         candidate_rendered_tokens.append(
-                            format_suggestion(extra_spec, candidate_values[extra_spec.canonical_key]))
+                            format_suggestion(
+                                extra_spec, candidate_values[extra_spec.canonical_key]
+                            )
+                        )
 
                     suggestion_texts.append(join_tokens(candidate_rendered_tokens))
 
@@ -266,7 +207,10 @@ def build_args_autocomplete_suggestions(
                     if extra_spec.canonical_key not in candidate_values:
                         continue
                     candidate_rendered_tokens.append(
-                        format_suggestion(extra_spec, candidate_values[extra_spec.canonical_key]))
+                        format_suggestion(
+                            extra_spec, candidate_values[extra_spec.canonical_key]
+                        )
+                    )
 
                 suggestion_texts.append(join_tokens(candidate_rendered_tokens))
 
@@ -281,7 +225,9 @@ def build_args_autocomplete_suggestions(
         suggestion_texts.append(join_tokens(normalized_rendered_tokens + [token]))
 
     if missing_placeholder_tokens:
-        suggestion_texts.append(join_tokens(normalized_rendered_tokens + missing_placeholder_tokens))
+        suggestion_texts.append(
+            join_tokens(normalized_rendered_tokens + missing_placeholder_tokens)
+        )
 
     # De-dupe and cap
     unique_suggestions: list[str] = []

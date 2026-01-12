@@ -3,7 +3,16 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Mapping, get_args, get_origin, Annotated, get_type_hints
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Mapping,
+    get_args,
+    get_origin,
+    Annotated,
+    get_type_hints,
+)
 
 import discord
 from discord import app_commands
@@ -39,7 +48,9 @@ def extract_choices(metadata: list[Any]) -> tuple[app_commands.Choice[Any], ...]
 
 
 # decorator to indicate a command that should be
-def roll_command(*, group: str | None = None, name: str | None = None, desc: str | None = None):
+def roll_command(
+    *, group: str | None = None, name: str | None = None, desc: str | None = None
+):
     meta = RollMeta(group=group, name=name, desc=desc)
 
     def deco(fn: RollFunc) -> RollFunc:
@@ -64,9 +75,9 @@ def extract_desc(metadata: list[Any], param_name: str) -> str:
 
 
 def build_discord_callback(
-        *,
-        roll_func: RollFunc,
-        invoke: Callable[[discord.Interaction, Mapping[str, Any]], Awaitable[None]],
+    *,
+    roll_func: RollFunc,
+    invoke: Callable[[discord.Interaction, Mapping[str, Any]], Awaitable[None]],
 ) -> Callable[..., Awaitable[None]]:
     qualified_name = f"{roll_func.__module__}.{roll_func.__qualname__}"
 
@@ -74,12 +85,14 @@ def build_discord_callback(
 
     type_hints = get_type_hints(roll_func, include_extras=True)
 
-    params: list[dict[str, Any]] = [{
-        "name": "label",
-        "annotation": str,
-        "description": "A label to describe the roll.",
-        "default": ...,
-    }]
+    params: list[dict[str, Any]] = [
+        {
+            "name": "label",
+            "annotation": str,
+            "description": "A label to describe the roll.",
+            "default": ...,
+        }
+    ]
 
     for p in signature.parameters.values():
         if p.name in ("self", "cls"):
@@ -94,13 +107,15 @@ def build_discord_callback(
             ) from exc
         default = p.default if p.default is not inspect._empty else ...
         choices = extract_choices(meta)
-        params.append({
-            "name": p.name,
-            "annotation": base_ann,  # already Range[...] / bool / etc
-            "description": desc,
-            "default": default,
-            "choices": choices,
-        })
+        params.append(
+            {
+                "name": p.name,
+                "annotation": base_ann,  # already Range[...] / bool / etc
+                "description": desc,
+                "default": default,
+                "choices": choices,
+            }
+        )
 
     signature_parts = ["interaction"]
     annotation_dict: dict[str, Any] = {"interaction": discord.Interaction}
@@ -117,7 +132,9 @@ def build_discord_callback(
             signature_parts.append(pname)
         else:
             default_value = p["default"]
-            if default_value is None or isinstance(default_value, (int, float, bool, str)):
+            if default_value is None or isinstance(
+                default_value, (int, float, bool, str)
+            ):
                 signature_parts.append(f"{pname}={default_value!r}")
             else:
                 signature_parts.append(f"{pname}={pname}_default")
@@ -136,24 +153,28 @@ def build_discord_callback(
     callback = with_signature(signature_text, evaldict=defaults)(implementation)
     callback.__annotations__ = annotation_dict
 
-    callback = app_commands.describe(**{p["name"]: p["description"] for p in params})(callback)
+    callback = app_commands.describe(**{p["name"]: p["description"] for p in params})(
+        callback
+    )
     if choices_by_param:
         callback = app_commands.choices(**choices_by_param)(callback)
     return callback
 
 
 async def invoke_roll_and_transmit(
-        interaction: discord.Interaction,
-        *,
-        roll_func: RollFunc,
-        raw_args: Mapping[str, Any],
+    interaction: discord.Interaction,
+    *,
+    roll_func: RollFunc,
+    raw_args: Mapping[str, Any],
 ) -> None:
     roll_kwargs = dict(raw_args)
     label = roll_kwargs.pop("label", "")
     try:
         result = roll_func(**roll_kwargs)
     except TypeError as exc:
-        await interaction.response.send_message(f"Internal command mapping error: {exc}", ephemeral=True)
+        await interaction.response.send_message(
+            f"Internal command mapping error: {exc}", ephemeral=True
+        )
         return
     except ValueError as exc:
         await interaction.response.send_message(str(exc), ephemeral=True)

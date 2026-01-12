@@ -15,12 +15,13 @@ from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import RollRecordBase
 from ..roller import additive_roll
 from ..rollui.base_roll_view import BaseRollView
-from ..rollui.roll_view_persist import EdgeMenuButton
 from ..sprite_context import InteractionContext
 
 
 class StartingCashRollView(BaseRollView):
-    def __init__(self, roll_result: StartingCashRoll, label: str, context: InteractionContext):
+    def __init__(
+        self, roll_result: StartingCashRoll, label: str, context: InteractionContext
+    ):
         header_txt = f"{roll_result.lifestyle.label} lifestyle starting cash\n{label}"
         super().__init__(header_txt, roll_result.lifestyle.color, context)
 
@@ -32,8 +33,6 @@ class StartingCashRollView(BaseRollView):
 
         self.add_text(dice_line)
         self.add_text(outcome)
-
-        
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,7 +78,9 @@ class StartingCashRoll(RollRecordBase):
         return StartingCashRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, interaction: InteractionContext):
+    async def send_edge_menu(
+        cls, record: MessageRecord, interaction: InteractionContext
+    ):
         pass
 
 
@@ -94,9 +95,10 @@ LIFESTYLE_CHOICES = tuple(
 
 @roll_command(desc="Roll for starting cash.")
 def roll_startingcash(
-        *,
-        lifestyle: Annotated[
-            str, Desc("What is their lifestyle level?"), Choices(LIFESTYLE_CHOICES)],
+    *,
+    lifestyle: Annotated[
+        str, Desc("What is their lifestyle level?"), Choices(LIFESTYLE_CHOICES)
+    ],
 ) -> StartingCashRoll:
     lifestyle = LifestyleStartingCash[lifestyle]
     return StartingCashRoll(result=additive_roll(lifestyle.dice), lifestyle=lifestyle)

@@ -24,7 +24,11 @@ class PushTheLimitHitsResult(HitsResult):
 
     def choose_emojis(self, context: InteractionContext):
         packs = context.emoji_manager.packs
-        chosen_emojis = packs.d6 if (self.glitch == Glitch.NONE) else context.emoji_manager.packs.d6_glitch
+        chosen_emojis = (
+            packs.d6
+            if (self.glitch == Glitch.NONE)
+            else context.emoji_manager.packs.d6_glitch
+        )
         limited_emojis = chosen_emojis
         return chosen_emojis, limited_emojis
 
@@ -33,7 +37,10 @@ class PushTheLimitHitsResult(HitsResult):
         packs = context.emoji_manager.packs
         chosen_emojis = packs.d6_ex
         for roll in self.exploded_dice:
-            line += f"\n`+`{packs.push}" + "".join(
-                chosen_emojis[x - 1] for x in roll) + f" **{sum(1 for r in roll if r in (5, 6))}** hits"
+            line += (
+                f"\n`+`{packs.push}"
+                + "".join(chosen_emojis[x - 1] for x in roll)
+                + f" **{sum(1 for r in roll if r in (5, 6))}** hits"
+            )
         line += f"\n**{self.hits_limited}** Total Hits"
         return line
