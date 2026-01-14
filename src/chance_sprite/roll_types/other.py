@@ -102,3 +102,47 @@ def roll_startingcash(
     return StartingCashRoll(
         result=additive_roll(chosen_lifestyle.dice), lifestyle=chosen_lifestyle
     )
+
+
+class InitiativeRollView(BaseRollView):
+    def __init__(self, roll: InitiativeRoll, label: str, context: InteractionContext):
+        header_txt = label
+        super().__init__(header_txt, 0xCC88AA, context)
+
+        dice = roll.result.render_dice(context)
+        total = roll.result.total_roll + roll.base
+        dice_line = f"`{roll.result.dice}d6`{dice} [**{roll.result.total_roll}**+{roll.base}]\n## Initiative: **{total}**"
+
+        self.add_text(dice_line)
+
+
+@message_codec.alias("StartingCashResult")
+@dataclass(frozen=True)
+class InitiativeRoll(RollRecordBase):
+    result: AdditiveResult
+    base: int
+
+    def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
+        return InitiativeRollView(self, label, context)
+
+    @classmethod
+    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+        pass
+
+
+@roll_command(desc="Roll for starting cash.")
+def roll_initiative(
+    *,
+    base: Annotated[
+        app_commands.Range[int, -50, 50],
+        Desc(
+            "Base initiative value, before dice (usually REA+INT). Can be negative e.g. if you are surprised."
+        ),
+    ],
+    dice: Annotated[
+        app_commands.Range[int, 1, 5],
+        Desc("Number of initiative dice (1-5)"),
+    ],
+) -> InitiativeRoll:
+    result = additive_roll(dice)
+    return InitiativeRoll(result=result, base=base)
