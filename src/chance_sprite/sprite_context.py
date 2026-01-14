@@ -27,11 +27,13 @@ class ClientContext(commands.Bot):
         self,
         *,
         emoji_manager: EmojiManager,
+        lite_emojis: EmojiManager,
         message_cache: MessageRecordStore,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.emoji_manager: EmojiManager = emoji_manager
+        self.emoji_manager = emoji_manager
+        self.lite_emojis = lite_emojis
         self.message_store: MessageRecordStore = message_cache
         self.message_handles: dict[int, InteractionMessage] = dict()
         self.base_command_name = None
@@ -42,8 +44,9 @@ class InteractionContext:
         assert isinstance(interaction.client, ClientContext)
         self.interaction = interaction
         self.emoji_manager = interaction.client.emoji_manager
+        self.lite_emojis = interaction.client.lite_emojis
         self.message_store = interaction.client.message_store
-        self.message_handles: dict[int, InteractionMessage] = dict()
+        self.message_handles = interaction.client.message_handles
 
     def get_cached_record(self, message_id: int):
         return self.message_store[message_id]
@@ -59,6 +62,9 @@ class InteractionContext:
     ):
         await self.defer_if_needed()
         view = new_result.build_view(old_record.label, self)
+        if view.content_length() > 4000:
+            self.emoji_manager = self.lite_emojis
+            view = new_result.build_view(old_record.label, self)
         # emojis = interaction.client.emoji_manager.packs
         # TODO: await emoji sync and update
         # if not context.emoji_manager.loaded:
@@ -99,9 +105,10 @@ class InteractionContext:
     async def transmit_result(self, label: str, result: RollRecordBase):
         interaction = self.interaction
         # TODO: await emoji sync and update
-        # if not context.emoji_manager.loaded:
-        #     pass
         primary_view = result.build_view(label, self)
+        if primary_view.content_length() > 4000:
+            self.emoji_manager = self.lite_emojis
+            primary_view = result.build_view(label, self)
         send_message_response: InteractionCallbackResponse = (
             await interaction.response.send_message(
                 view=primary_view,
@@ -116,7 +123,7 @@ class InteractionContext:
         try:
             if isinstance(interaction.channel, DMChannel):
                 log.info(
-                    f"User [{interaction.user.display_name}] rolled [{result.__class__.__name__}] in [{interaction.channel.id}]"
+                    f"User [{interaction.user.display_name}] rolled [{result.__class__.__name__}] in [{[user.display_name for user in interaction.channel.recipients]}]"
                 )
             elif interaction.channel:
                 log.info(

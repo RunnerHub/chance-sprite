@@ -11,16 +11,16 @@ from discord.ext import commands
 from chance_sprite.emojis.emoji_manager import EmojiManager
 from chance_sprite.file_sprite import (
     ConfigFile,
-    RollRecordCacheFile,
     DatabaseHandle,
     MessageRecordStore,
+    RollRecordCacheFile,
 )
 from chance_sprite.rollui.roll_view_persist import RollViewPersist
 from chance_sprite.sprite_context import ClientContext
 
 log = logging.getLogger(__name__)
 
-EXTENSIONS: tuple[str, ...] = ("chance_sprite.rolld6_commands",)
+EXTENSIONS: tuple[str, ...] = ("chance_sprite.command_loader",)
 
 
 class DiscordSprite(ClientContext):
@@ -30,8 +30,11 @@ class DiscordSprite(ClientContext):
         intents = discord.Intents.default()
         intents.guilds = True
         intents.guild_messages = True
+        heavy_emojis = EmojiManager("chance_sprite.emojis")
+        lite_emojis = EmojiManager("chance_sprite.emojis")
         super().__init__(
-            emoji_manager=EmojiManager("chance_sprite.emojis"),
+            emoji_manager=heavy_emojis,
+            lite_emojis=lite_emojis,
             message_cache=MessageRecordStore(self.database),
             command_prefix=commands.when_mentioned,  # unused for slash-only; harmless
             intents=intents,
@@ -80,8 +83,8 @@ class DiscordSprite(ClientContext):
         await self.emoji_manager.sync_application_emojis(self)
         self.emoji_manager.build_packs()
         try:
-            username = self.config["username"]
-            if self.user.name != username:
+            username = self.config.get("username")
+            if self.user and username and self.user.name != username:
                 log.info(
                     f"attempting to change username from {self.user.name} to {username}"
                 )

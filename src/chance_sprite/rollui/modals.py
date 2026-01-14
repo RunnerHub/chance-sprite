@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from discord import ui, Interaction
+from discord import Interaction, ui
 
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import ResistableRoll
@@ -28,7 +28,9 @@ class NumberInputModal(ui.Modal):
             max_length=3,
         )
         self.label = ui.Label(
-            text=body, component=self.dice_to_add, description="Description"
+            text=body,
+            component=self.dice_to_add,
+            description="Enter the number of dice",
         )
         self.min_val = min_val
         self.max_val = max_val
@@ -76,8 +78,8 @@ class ResistModal(NumberInputModal):
         else:
             self.threshold = 0
         super().__init__(
-            title=f"Resist {record.label} ({self.threshold})?",
-            body="Enter your resistance dice pool.",
+            title="Resistance roll",
+            body=f"Rolling to resist {record.label} ({self.threshold} hits)",
             do_action=self.on_resist_confirm,
             on_after=self.after_use,
             min_val=min_val,

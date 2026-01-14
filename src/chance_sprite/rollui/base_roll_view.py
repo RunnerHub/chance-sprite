@@ -1,6 +1,7 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
+import re
+from typing import TYPE_CHECKING
 
 from discord import WebhookMessage, ui
 
@@ -11,6 +12,9 @@ if TYPE_CHECKING:
 class BaseView(ui.LayoutView):
     def __init__(self, *, timeout: float | None = None):
         super().__init__(timeout=timeout)
+
+
+CROSSOUT_SUB = re.compile(r"~~~~")
 
 
 class BaseRollView(BaseView):
@@ -33,18 +37,13 @@ class BaseRollView(BaseView):
         self.add_item(self.container)
 
     def add_text(self, txt: str):
-        self.container.add_item(ui.TextDisplay(txt))
+        self.container.add_item(ui.TextDisplay(CROSSOUT_SUB.sub("", txt)))
 
     def add_long_text(self, blocks: list[str]):
         # Split into chunks
         chunk = ""
         for block in blocks:
-            candidate = (chunk + "\n" + block).strip() if chunk else block
-            if len(candidate) > 1800:  # keep headroom
-                self.add_text(chunk)
-                chunk = block
-            else:
-                chunk = candidate
+            chunk = (chunk + "\n" + block).strip() if chunk else block.strip()
 
         if chunk:
             self.add_text(chunk)
