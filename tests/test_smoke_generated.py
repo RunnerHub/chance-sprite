@@ -8,17 +8,16 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Annotated, Any, Union, cast, get_args, get_origin, get_type_hints
 
-import discord
 import pytest
 from discord import app_commands
 from discord.app_commands.transformers import RangeTransformer
 
+from chance_sprite.discord_sprite import DiscordSprite
 from chance_sprite.emojis.emoji_manager import RAW_TEXT_EMOJI_PACK, EmojiManager
-from chance_sprite.file_sprite import RollRecordCacheFile
 
 # Import these from your real generator module
-from chance_sprite.fungen import Choices, Desc  # adjust names if different
-from chance_sprite.sprite_context import ClientContext
+from chance_sprite.fungen import Choices, Desc
+from chance_sprite.sprite_context import InteractionContext  # adjust names if different
 
 PACKAGE = "chance_sprite.roll_types"
 
@@ -198,22 +197,41 @@ class FakeUser:
     def __init__(self) -> None:
         self.display_name = ""
         self.display_avatar = FakeAvatar()
+        self.id = 0
 
+class FakeMessage:
+    def __init__(self) -> None:
+        self.id = 0
 
 class FakeInteraction:
     def __init__(self) -> None:
         self.user = FakeUser()
+        self.guild_id = 0
+        self.message = FakeMessage()
 
+class FakeAvatarStore:
+    def __init__(self) -> None:
+        pass
 
-class FakeContext:
+    def get_avatar(self, a, b):
+        return ("", "")
+        
+
+class FakeClient:
+    def __init__(self) -> None:
+        self.message_store = dict()
+        self.webhook_handles = dict()
+        self.user_avatar_store = FakeAvatarStore()
+
+class FakeContext(InteractionContext):
     def __init__(self) -> None:
         self.emoji_manager = EmojiManager("chance_sprite.emojis")
         # minimal setup
         self.emoji_manager.packs = RAW_TEXT_EMOJI_PACK
-        self.message_cache = RollRecordCacheFile("message_cache.json")
         self.message_handles = {}  # if your code touches it
         self.base_command_name = None
         self.interaction = FakeInteraction()
+        self.client = FakeClient()
 
 
 @pytest.mark.asyncio
@@ -234,5 +252,5 @@ async def test_roll_smoke_per_item(case: Case) -> None:
 
     if hasattr(roll, "build_view"):
         context_obj = cast(object, FakeContext())
-        context = cast(ClientContext, context_obj)
+        context = cast(DiscordSprite, context_obj)
         roll.build_view("Smoke", context)
