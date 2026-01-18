@@ -1,45 +1,57 @@
 # basic.py
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from datetime import timedelta, datetime, timezone
-from typing import Optional, Annotated, override
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta, timezone
+from typing import Annotated, Optional, override
 
 from boltons.cacheutils import cachedproperty
-from discord import app_commands
-from discord import ui
+from discord import app_commands, ui
 
 from chance_sprite.result_types import HitsResult
-from chance_sprite.roller import roll_hits, roll_exploding
-from ..rollui.roll_accessor import RollAccessor
+from chance_sprite.roller import roll_exploding, roll_hits
+
 from ..fungen import Desc, roll_command
 from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import ResistableRoll, RollRecordBase
 from ..rollui.base_roll_view import BaseRollView
-from ..rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from ..rollui.generic_edge_menu import GenericEdgeMenu
+from ..rollui.roll_accessor import RollAccessor
+from ..rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from ..sprite_context import InteractionContext
-from ..sprite_utils import humanize_timedelta, color_by_net_hits, plural_s
+from ..sprite_utils import color_by_net_hits, humanize_timedelta, plural_s
 
 
 class ThresholdView(BaseRollView):
     def __init__(
         self, roll_result: ThresholdRoll, label: str, context: InteractionContext
     ):
-        super().__init__(label, color_by_net_hits(roll_result.net_hits), context)
-
         dice = roll_result.result.render_roll(context)
         if roll_result.threshold:
             dice += f" vs ({roll_result.threshold})"
         glitch = roll_result.result.render_glitch(context)
         if glitch:
             dice += "\n" + glitch
-        self.add_text(dice)
 
+        outcome_txt = ""
         if roll_result.threshold > 0:
             outcome = "Succeeded!" if roll_result.succeeded else "Failed!"
-            self.add_text(f"**{outcome}** ({roll_result.net_hits:+d} net)")
+            outcome_txt = f"**{outcome}** ({roll_result.net_hits:+d} net)"
+
+        super().__init__(
+            f"{label}\n{dice}\n{outcome_txt}",
+            color_by_net_hits(roll_result.net_hits),
+            context,
+        )
+
+        for user_id, resist_result in roll_result.resistance_rolls.items():
+            (username, avatar) = context.get_avatar(user_id)
+            dice = resist_result.render_roll_with_glitch(context)
+            net_hits = resist_result.hits_limited - roll_result.result.hits_limited
+            outcome = "Succeeded!" if net_hits >= 0 else "Failed!"
+            txt = f"**{username}** resists:\n{dice}\n**{outcome}** ({net_hits:+d} net)"
+            self.add_section(txt, avatar)
 
         if roll_result.resistable:
             self.add_buttons(EdgeMenuButton(), ResistButton())
@@ -53,6 +65,7 @@ class ThresholdView(BaseRollView):
 class ThresholdRoll(ResistableRoll):
     result: HitsResult
     threshold: int = 0
+    resistance_rolls: dict[int, HitsResult] = field(default_factory=dict)
 
     @property
     def succeeded(self) -> Optional[bool]:
@@ -71,17 +84,49 @@ class ThresholdRoll(ResistableRoll):
         return ThresholdView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
-        result_accessor = RollAccessor[ThresholdRoll](
-            getter=lambda r: r.result, setter=lambda r, v: replace(r, result=v)
-        )
-        menu = GenericEdgeMenu(
-            f"Edge for {record.label}:", result_accessor, record.message_id, context
-        )
-        await context.send_as_followup(menu)
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
+        user_id = context.interaction.user.id
+        if user_id == record.owner_id:
+            result_accessor = RollAccessor[ThresholdRoll](
+                getter=lambda r: r.result,
+                setter=lambda r, v: replace(r, result=v),
+            )
+            menu = GenericEdgeMenu(
+                f"Edge for {record.label}:", result_accessor, record.message_id, context
+            )
+            await context.send_as_followup(menu)
+        if user_id in record.roll_result.resistance_rolls.keys():
+            result_accessor = RollAccessor[ThresholdRoll](
+                getter=lambda r: r.resistance_rolls[user_id],
+                setter=lambda r, v: replace(
+                    r, resistance_rolls={**r.resistance_rolls, user_id: v}
+                ),
+            )
+            menu = GenericEdgeMenu(
+                f"Edge for resisting {record.label}:",
+                result_accessor,
+                record.message_id,
+                context,
+            )
+            await context.send_as_followup(menu)
 
     def resistance_target(self) -> int:
         return self.result.hits_limited
+
+    def current_owners(self, record: MessageRecord, context: InteractionContext):
+        return [record.owner_id, *self.resistance_rolls.keys()]
+
+    def resist(
+        self, record: MessageRecord, context: InteractionContext, dice: int
+    ) -> ResistableRoll:
+        resist_roll = roll_hits(dice, limit=0, gremlins=0)
+        user_id = context.interaction.user.id
+        return replace(
+            self, resistance_rolls={**self.resistance_rolls, user_id: resist_roll}
+        )
+
+    def already_resisted(self) -> list[int]:
+        return [*self.resistance_rolls.keys()]
 
 
 @roll_command(desc="Roll some d6s, Shadowrun-style.")
@@ -176,7 +221,7 @@ class ExtendedRoll(RollRecordBase):
         return ExtendedRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         pass
 
 
@@ -275,7 +320,7 @@ class OpposedRoll(RollRecordBase):
         return OpposedRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         result_accessor = RollAccessor[OpposedRoll](
             getter=lambda r: r.initiator, setter=lambda r, v: replace(r, initiator=v)
         )
@@ -412,7 +457,7 @@ class AvailabilityRoll(RollRecordBase):
         return AvailabilityRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         result_accessor = RollAccessor[OpposedRoll](
             getter=lambda r: r.initiator, setter=lambda r, v: replace(r, initiator=v)
         )

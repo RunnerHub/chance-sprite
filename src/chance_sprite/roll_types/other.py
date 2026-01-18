@@ -78,7 +78,7 @@ class StartingCashRoll(RollRecordBase):
         return StartingCashRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         pass
 
 
@@ -126,7 +126,7 @@ class InitiativeRoll(RollRecordBase):
         return InitiativeRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         pass
 
 

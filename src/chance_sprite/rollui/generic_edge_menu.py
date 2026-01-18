@@ -10,7 +10,7 @@ from chance_sprite.roller import close_call, push_the_limit, second_chance
 from chance_sprite.rollui.base_roll_view import BaseMenuView
 from chance_sprite.rollui.modals import ConfirmModal, NumberInputModal
 from chance_sprite.rollui.roll_accessor import GenericResultAccessor
-from chance_sprite.sprite_context import ClientContext, InteractionContext
+from chance_sprite.sprite_context import InteractionContext
 from chance_sprite.sprite_utils import Glitch
 
 log = logging.getLogger(__name__)
@@ -31,12 +31,12 @@ class SecondChanceButton(EdgeButton):
     def __init__(self):
         super().__init__(label="2nd Chance")
 
-    async def on_second_chance_confirm(self, interaction: Interaction[ClientContext]):
+    async def on_second_chance_confirm(self, interaction: Interaction):
         await self.base_view.handle_case(lambda r: second_chance(r), interaction)
         self.disable_edge_buttons()
 
     @override
-    async def callback(self, interaction: Interaction[ClientContext]):
+    async def callback(self, interaction: Interaction):
         await interaction.response.send_modal(
             ConfirmModal(
                 title="2nd Chance",
@@ -51,14 +51,12 @@ class PushLimitButton(EdgeButton):
     def __init__(self):
         super().__init__(label="Push the Limit")
 
-    async def on_push_limit_confirm(
-        self, interaction: Interaction[ClientContext], edge: int
-    ) -> None:
+    async def on_push_limit_confirm(self, interaction: Interaction, edge: int) -> None:
         await self.base_view.handle_case(lambda r: push_the_limit(r, edge), interaction)
         self.disable_edge_buttons()
 
     @override
-    async def callback(self, interaction: Interaction[ClientContext]):
+    async def callback(self, interaction: Interaction):
         await interaction.response.send_modal(
             NumberInputModal(
                 title=self.label,
@@ -73,14 +71,12 @@ class CloseCallButton(EdgeButton):
     def __init__(self):
         super().__init__(label="Close Call")
 
-    async def on_close_call_confirm(
-        self, interaction: Interaction[ClientContext]
-    ) -> None:
+    async def on_close_call_confirm(self, interaction: Interaction) -> None:
         await self.base_view.handle_case(lambda r: close_call(r), interaction)
         self.disable_edge_buttons()
 
     @override
-    async def callback(self, interaction: Interaction[ClientContext]):
+    async def callback(self, interaction: Interaction):
         await interaction.response.send_modal(
             ConfirmModal(
                 title=self.label,
@@ -93,7 +89,7 @@ class CloseCallButton(EdgeButton):
 
 class AdjustButton(ui.Button):
     def __init__(self, label: str):
-        super().__init__(label=label)
+        super().__init__(label=label, custom_id=label)
         self.base_view: GenericEdgeMenu | None = None
         self.style = ButtonStyle.primary
 
@@ -102,13 +98,11 @@ class AdjustDiceButton(AdjustButton):
     def __init__(self):
         super().__init__(label="Adjust Dice")
 
-    async def on_adjust_dice_confirm(
-        self, interaction: Interaction[ClientContext], dice: int
-    ) -> None:
+    async def on_adjust_dice_confirm(self, interaction: Interaction, dice: int) -> None:
         await self.base_view.handle_case(lambda r: r.adjust_dice(dice), interaction)
 
     @override
-    async def callback(self, interaction: Interaction[ClientContext]):
+    async def callback(self, interaction: Interaction):
         await interaction.response.send_modal(
             NumberInputModal(
                 title=self.label or "",
@@ -126,12 +120,12 @@ class AdjustLimitButton(AdjustButton):
         super().__init__(label="Adjust Limit")
 
     async def on_adjust_limit_confirm(
-        self, interaction: Interaction[ClientContext], limit: int
+        self, interaction: Interaction, limit: int
     ) -> None:
         await self.base_view.handle_case(lambda r: r.adjust_limit(limit), interaction)
 
     @override
-    async def callback(self, interaction: Interaction[ClientContext]):
+    async def callback(self, interaction: Interaction):
         await interaction.response.send_modal(
             NumberInputModal(
                 title=self.label or "",
@@ -204,23 +198,23 @@ class GenericEdgeMenu(BaseMenuView):
     async def handle_case(
         self,
         mutate: Callable[[HitsResult], HitsResult],
-        interaction: Interaction[ClientContext],
+        interaction: Interaction,
     ):
         context = InteractionContext(interaction)
         original_message = context.get_cached_record(self.original_message_id)
-        if not original_message.owner_id == context.interaction.user.id:
+        if context.interaction.user.id not in original_message.current_owners(context):
             return
         old_result = self.result_accessor.get(original_message)
         new_result = self.result_accessor.update(original_message, mutate(old_result))
         await context.update_original(original_message, new_result)
         log.info("original message updated.")
 
-    async def on_dismiss_button(self, interaction: Interaction[ClientContext]):
+    async def on_dismiss_button(self, interaction: Interaction):
         if self.followup_message:
             await InteractionContext(interaction).defer_if_needed()
             await self.followup_message.delete()
 
-    async def after_use(self, interaction: Interaction[ClientContext] | None = None):
+    async def after_use(self, interaction: Interaction | None = None):
         if self.followup_message:
             await self.followup_message.edit(view=self)
         if interaction:

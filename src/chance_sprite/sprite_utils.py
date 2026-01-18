@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import logging
+import random
 from datetime import timedelta
 from enum import Enum
-import random
+import time
 from typing import Protocol, TypeGuard, runtime_checkable
 
 import discord
@@ -135,3 +136,7 @@ class Glitch(Enum):
 
 
 _default_random = random.Random()
+
+
+def epoch_seconds() -> int:
+    return int(time.time())

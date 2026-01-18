@@ -10,37 +10,43 @@ from discord.ext import commands
 
 from chance_sprite.emojis.emoji_manager import EmojiManager
 from chance_sprite.file_sprite import (
+    CacheFile,
     ConfigFile,
     DatabaseHandle,
     MessageRecordStore,
-    RollRecordCacheFile,
+    UserAvatarStore,
 )
+from chance_sprite.message_cache.webhook_handle import WebhookHandle
 from chance_sprite.rollui.roll_view_persist import RollViewPersist
-from chance_sprite.sprite_context import ClientContext
 
 log = logging.getLogger(__name__)
 
 EXTENSIONS: tuple[str, ...] = ("chance_sprite.command_loader",)
 
 
-class DiscordSprite(ClientContext):
+def _intents():
+    # TODO: minimal intents
+    return discord.Intents.default()
+
+
+class DiscordSprite(commands.Bot):
     def __init__(self, *, enable_sync: bool = True) -> None:
+        super().__init__(
+            command_prefix=commands.when_mentioned,  # unused for slash-only; harmless
+            intents=_intents(),
+        )
         self.config = ConfigFile[str, Any]("config.json")
         self.database = DatabaseHandle("chance_sprite.sqlite3")
-        intents = discord.Intents.default()
-        intents.guilds = True
-        intents.guild_messages = True
         heavy_emojis = EmojiManager("chance_sprite.emojis")
         lite_emojis = EmojiManager("chance_sprite.emojis")
-        super().__init__(
-            emoji_manager=heavy_emojis,
-            lite_emojis=lite_emojis,
-            message_cache=MessageRecordStore(self.database),
-            command_prefix=commands.when_mentioned,  # unused for slash-only; harmless
-            intents=intents,
-        )
-        old_cache_file = RollRecordCacheFile("message_cache.json")
-        old_cache_file.dump(self.message_store)
+
+        self.emoji_manager = heavy_emojis
+        self.lite_emojis = lite_emojis
+        self.message_store = MessageRecordStore(self.database)
+        self.message_handles: dict[int, discord.InteractionMessage] = dict()
+        self.webhook_handles = CacheFile[int, WebhookHandle]("webhook_cache.json")
+        self.base_command_name = None
+        self.user_avatar_store = UserAvatarStore(self.database)
         self.enable_global_sync = enable_sync
         self.base_command_name = self.config["command_name"]
 

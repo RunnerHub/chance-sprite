@@ -9,13 +9,13 @@ from types import ModuleType
 from typing import Callable
 
 from discord import app_commands
+from discord.ext import commands
 
 from chance_sprite.fungen import (
     RollMeta,
     build_discord_callback,
     invoke_roll_and_transmit,
 )
-from chance_sprite.sprite_context import ClientContext
 
 log = logging.getLogger(__name__)
 RollFunc = Callable[..., object]
@@ -64,9 +64,13 @@ def identity(fn: RollFunc, base_package: str) -> tuple[str | None, str, str]:
     return group, name, desc
 
 
-async def setup(bot: ClientContext) -> None:
+async def setup(bot: commands.Bot) -> None:
+    from .discord_sprite import DiscordSprite
+
+    assert isinstance(bot, DiscordSprite)
     root = app_commands.Group(
-        name=bot.base_command_name, description="SR5 d6 dice rolling tools."
+        name=bot.base_command_name or "misconfiguredbot",
+        description="SR5 d6 dice rolling tools.",
     )
     app_commands.allowed_installs(guilds=True, users=True)(root)
     app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)(root)

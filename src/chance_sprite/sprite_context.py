@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import replace
 from datetime import datetime, timedelta
 
@@ -10,52 +11,66 @@ from discord import (
     InteractionCallbackResponse,
     InteractionMessage,
 )
-from discord.ext import commands
 
-from chance_sprite.emojis.emoji_manager import EmojiManager
-from chance_sprite.file_sprite import MessageRecordStore
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import RollRecordBase
+from chance_sprite.message_cache.webhook_handle import WebhookHandle
 from chance_sprite.rollui.base_roll_view import BaseMenuView
-from chance_sprite.sprite_utils import has_get_partial_message
+from chance_sprite.sprite_utils import epoch_seconds, has_get_partial_message
 
 log = logging.getLogger(__name__)
 
 
-class ClientContext(commands.Bot):
-    def __init__(
-        self,
-        *,
-        emoji_manager: EmojiManager,
-        lite_emojis: EmojiManager,
-        message_cache: MessageRecordStore,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.emoji_manager = emoji_manager
-        self.lite_emojis = lite_emojis
-        self.message_store: MessageRecordStore = message_cache
-        self.message_handles: dict[int, InteractionMessage] = dict()
-        self.base_command_name = None
-
-
 class InteractionContext:
     def __init__(self, interaction: Interaction):
-        assert isinstance(interaction.client, ClientContext)
         self.interaction = interaction
+        from .discord_sprite import DiscordSprite
+
+        assert isinstance(interaction.client, DiscordSprite)
+        self.client = interaction.client
         self.emoji_manager = interaction.client.emoji_manager
         self.lite_emojis = interaction.client.lite_emojis
-        self.message_store = interaction.client.message_store
-        self.message_handles = interaction.client.message_handles
+
+        self.client.user_avatar_store.update_avatar(
+            self.interaction.user.id,
+            self.interaction.guild_id or 0,
+            self.interaction.user.display_name,
+            str(self.interaction.user.display_avatar),
+        )
+
+    def get_roll_record(self):
+        record = None
+        if not self.interaction.message:
+            return None
+
+        message_id = self.interaction.message.id
+        record = self.client.message_store.get(message_id)
+        if record:
+            return record
+
+        menu: WebhookHandle | None = self.client.webhook_handles.get(message_id)
+        if not menu:
+            return None
+
+        original_id = menu.original_target
+        if not original_id:
+            return None
+
+        return self.get_cached_record(original_id)
 
     def get_cached_record(self, message_id: int):
-        return self.message_store[message_id]
+        return self.client.message_store[message_id]
 
     def cache_message_handle(self, handle: InteractionMessage):
-        self.message_handles[handle.id] = handle
+        self.client.message_handles[handle.id] = handle
 
     def get_cached_message_handle(self, id: int):
-        return self.message_handles.get(id)
+        return self.client.message_handles.get(id)
+
+    def get_avatar(self, user_id: int | None = None):
+        lookup_id = user_id if user_id else self.interaction.user.id
+        guild_id = self.interaction.guild_id or 0
+        return self.client.user_avatar_store.get_avatar(lookup_id, guild_id)
 
     async def update_original(
         self, old_record: MessageRecord, new_result: RollRecordBase
@@ -63,12 +78,8 @@ class InteractionContext:
         await self.defer_if_needed()
         view = new_result.build_view(old_record.label, self)
         if view.content_length() > 4000:
-            self.emoji_manager = self.lite_emojis
+            self.emoji_manager = self.client.lite_emojis
             view = new_result.build_view(old_record.label, self)
-        # emojis = interaction.client.emoji_manager.packs
-        # TODO: await emoji sync and update
-        # if not context.emoji_manager.loaded:
-        #     pass
         try:
             cached_message_handle = self.get_cached_message_handle(
                 old_record.message_id
@@ -76,7 +87,7 @@ class InteractionContext:
             if cached_message_handle:
                 await cached_message_handle.edit(view=view)
                 new_record = replace(old_record, roll_result=new_result)
-                self.message_store.put(new_record)
+                self.client.message_store.put(new_record)
                 log.info("Edited via cached message")
                 return new_record
             else:
@@ -93,10 +104,9 @@ class InteractionContext:
             original_message = self.interaction.channel.get_partial_message(
                 old_record.message_id
             )
-            # Edit the original message
             await original_message.edit(view=view)
             new_record = replace(old_record, roll_result=new_result)
-            self.message_store.put(new_record)
+            self.client.message_store.put(new_record)
             log.info("Edited via partial message")
             return new_record
         except Exception as e:
@@ -104,10 +114,9 @@ class InteractionContext:
 
     async def transmit_result(self, label: str, result: RollRecordBase):
         interaction = self.interaction
-        # TODO: await emoji sync and update
         primary_view = result.build_view(label, self)
         if primary_view.content_length() > 4000:
-            self.emoji_manager = self.lite_emojis
+            self.emoji_manager = self.client.lite_emojis
             primary_view = result.build_view(label, self)
         send_message_response: InteractionCallbackResponse = (
             await interaction.response.send_message(
@@ -148,7 +157,7 @@ class InteractionContext:
                 expires_at=int(expires_at.timestamp()),
                 roll_result=result,
             )
-            self.message_store.put(record)
+            self.client.message_store.put(record)
             return record
 
     async def defer_if_needed(self):
@@ -157,24 +166,34 @@ class InteractionContext:
             try:
                 await self.interaction.response.defer()
             except Exception as e:
-                log.info("Exception in deferral: %s", e)
+                frame = sys._getframe(1)
 
-    async def transmit_result_from_interaction(self):
-        if not self.interaction.message:
-            log.error(
-                f"Couldn't find message on transmitted interaction: {self.interaction}"
-            )
-        else:
-            message_id = self.interaction.message.id
-            message_record = self.message_store[message_id]
-            label = message_record.label
-            result = message_record.roll_result
-            await self.transmit_result(label, result)
-        await self.defer_if_needed()
+                log.info(
+                    "Exception in deferral (%s:%d in %s): %s",
+                    frame.f_code.co_filename,
+                    frame.f_lineno,
+                    frame.f_code.co_name,
+                    e,
+                )
 
     async def send_as_followup(self, menu: BaseMenuView):
+        original_message_id = (
+            self.interaction.message.id if self.interaction.message else None
+        )
         followup_message = await self.interaction.followup.send(
             view=menu, wait=True, ephemeral=True
         )
+        webhook_id = self.interaction.followup.id
+        token = self.interaction.followup.auth_token or ""
+        message_id = followup_message.id
+        expires_at = epoch_seconds() + 890  # 15 mins - 10 seconds
+        handle = WebhookHandle(
+            message_id,
+            webhook_id,
+            token,
+            expires_at,
+            original_target=original_message_id,
+        )
+        self.client.webhook_handles.set(message_id, handle, expires_at=expires_at)
         menu.followup_message = followup_message
         # self.followup_message = await interaction.edit_original_response(view=self)

@@ -1,8 +1,8 @@
-# $FILE_NAME$
+# magic.py
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Annotated, Optional
 
 from discord import app_commands, ui
@@ -55,7 +55,7 @@ class AlchemyCreateRoll(RollRecordBase):
         return AlchemyCreateRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         cast_accessor = RollAccessor[AlchemyCreateRoll](
             getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v)
         )
@@ -120,6 +120,7 @@ def roll_alchemy_create(
     )
 
 
+@message_codec.alias("ResistedAlchemyRoll")
 @dataclass(frozen=True)
 class AlchemyActivateRoll(ResistableRoll):
     # Inputs
@@ -128,16 +129,46 @@ class AlchemyActivateRoll(ResistableRoll):
     practiced: int
     # Rolls
     cast: HitsResult
+    resistance_rolls: dict[int, HitsResult] = field(default_factory=dict)
 
     def build_view(self, label: str, context: InteractionContext) -> ui.LayoutView:
         return AlchemyActivateRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
-        pass
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
+        user_id = context.interaction.user.id
+        if user_id in record.roll_result.resistance_rolls.keys():
+            result_accessor = RollAccessor[AlchemyActivateRoll](
+                getter=lambda r: r.resistance_rolls[user_id],
+                setter=lambda r, v: replace(
+                    r, resistance_rolls={**r.resistance_rolls, user_id: v}
+                ),
+            )
+            menu = GenericEdgeMenu(
+                f"Edge for resisting {record.label}:",
+                result_accessor,
+                record.message_id,
+                context,
+            )
+            await context.send_as_followup(menu)
+
+    def current_owners(self, record: MessageRecord, context: InteractionContext):
+        return [record.owner_id, *self.resistance_rolls.keys()]
 
     def resistance_target(self) -> int:
         return self.cast.hits_limited
+
+    def already_resisted(self) -> list[int]:
+        return [*self.resistance_rolls.keys()]
+
+    def resist(
+        self, record: MessageRecord, context: InteractionContext, dice: int
+    ) -> ResistableRoll:
+        resist_roll = roll_hits(dice, limit=0, gremlins=0)
+        user_id = context.interaction.user.id
+        return replace(
+            self, resistance_rolls={**self.resistance_rolls, user_id: resist_roll}
+        )
 
 
 @roll_command(desc="Roll to activate an existing alchemical preparation.")
@@ -233,7 +264,7 @@ class BindingRoll(RollRecordBase):
         return BindingRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         bind_accessor = RollAccessor[BindingRoll](
             getter=lambda r: r.bind, setter=lambda r, v: replace(r, bind=v)
         )
@@ -296,6 +327,7 @@ def roll_binding(
     )
 
 
+@message_codec.alias("ResistedSpellRoll")
 @message_codec.alias("SpellcastResult")
 @dataclass(frozen=True)
 class SpellRoll(ResistableRoll):
@@ -306,7 +338,8 @@ class SpellRoll(ResistableRoll):
     # Rolls
     cast: HitsResult
     drain: HitsResult
-    opposed: HitsResult | None = None
+    opposition: HitsResult | None = None
+    resistance_rolls: dict[int, HitsResult] = field(default_factory=dict)
 
     @property
     def drain_succeeded(self) -> Optional[bool]:
@@ -347,31 +380,62 @@ class SpellRoll(ResistableRoll):
         return SpellRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
-        cast_accessor = RollAccessor[SpellRoll](
-            getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v)
-        )
-        edge_menu1 = GenericEdgeMenu(
-            f"Edge Spellcasting for {record.label}?",
-            cast_accessor,
-            record.message_id,
-            context,
-        )
-        await context.send_as_followup(edge_menu1)
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
+        user_id = context.interaction.user.id
+        if user_id == record.owner_id:
+            cast_accessor = RollAccessor[SpellRoll](
+                getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v)
+            )
+            edge_menu1 = GenericEdgeMenu(
+                f"Edge Spellcasting for {record.label}?",
+                cast_accessor,
+                record.message_id,
+                context,
+            )
+            await context.send_as_followup(edge_menu1)
 
-        drain_accessor = RollAccessor[SpellRoll](
-            getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
-        )
-        menu2 = GenericEdgeMenu(
-            f"Edge Drain for {record.label}?",
-            drain_accessor,
-            record.message_id,
-            context,
-        )
-        await context.send_as_followup(menu2)
+            drain_accessor = RollAccessor[SpellRoll](
+                getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
+            )
+            menu2 = GenericEdgeMenu(
+                f"Edge Drain for {record.label}?",
+                drain_accessor,
+                record.message_id,
+                context,
+            )
+            await context.send_as_followup(menu2)
+        if user_id in record.roll_result.resistance_rolls.keys():
+            result_accessor = RollAccessor[SpellRoll](
+                getter=lambda r: r.resistance_rolls[user_id],
+                setter=lambda r, v: replace(
+                    r, resistance_rolls={**r.resistance_rolls, user_id: v}
+                ),
+            )
+            menu = GenericEdgeMenu(
+                f"Edge for resisting {record.label}:",
+                result_accessor,
+                record.message_id,
+                context,
+            )
+            await context.send_as_followup(menu)
 
     def resistance_target(self) -> int:
         return self.cast.hits_limited
+
+    def current_owners(self, record: MessageRecord, context: InteractionContext):
+        return [record.owner_id, *self.resistance_rolls.keys()]
+
+    def already_resisted(self) -> list[int]:
+        return [*self.resistance_rolls.keys()]
+
+    def resist(
+        self, record: MessageRecord, context: InteractionContext, dice: int
+    ) -> ResistableRoll:
+        resist_roll = roll_hits(dice, limit=0, gremlins=0)
+        user_id = context.interaction.user.id
+        return replace(
+            self, resistance_rolls={**self.resistance_rolls, user_id: resist_roll}
+        )
 
 
 @roll_command(
@@ -395,22 +459,27 @@ def roll_spell(
         Desc("Optional limit override (defaults to Force)."),
     ] = None,
     pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
-    resistable: Annotated[
-        bool, Desc("Whether others may roll to resist this spell.")
-    ] = True,
+    opposing_pool: Annotated[
+        Optional[app_commands.Range[int, 0, 99]],
+        Desc("Does the spell roll against an inherent pool? e.g. Object Resistance"),
+    ] = None,
 ) -> SpellRoll:
     if pre_edge:
         cast = roll_exploding(cast_dice)
     else:
         cast = roll_hits(cast_dice, limit=limit_override or force)
     drain = roll_hits(drain_dice)
+    if opposing_pool:
+        opposition = roll_hits(opposing_pool)
+    else:
+        opposition = None
 
     return SpellRoll(
         force=force,
         drain_value=force + drain_code,
         cast=cast,
         drain=drain,
-        resistable=resistable,
+        opposition=opposition,
     )
 
 
@@ -446,7 +515,7 @@ class SummonRoll(RollRecordBase):
         return SummonRollView(self, label, context)
 
     @classmethod
-    async def send_edge_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         summon_accessor = RollAccessor[SummonRoll](
             getter=lambda r: r.summon, setter=lambda r, v: replace(r, summon=v)
         )
@@ -585,6 +654,7 @@ class AlchemyActivateRollView(BaseRollView):
     def __init__(
         self, roll_result: AlchemyActivateRoll, label: str, context: InteractionContext
     ):
+        cast_line = roll_result.cast.render_roll_with_glitch(context)
         header_txt = (
             label
             + f"\nForce {roll_result.force} | Potency: {roll_result.potency}"
@@ -593,14 +663,19 @@ class AlchemyActivateRollView(BaseRollView):
                 if roll_result.practiced != 0
                 else ""
             )
+            + f"\n{cast_line}"
         )
         super().__init__(header_txt, 0xCC88CC, context)
 
-        # Spellcasting line: show raw hits and limited hits
-        cast_line = roll_result.cast.render_roll_with_glitch(context)
-        self.add_text(cast_line)
-        if roll_result.resistable:
-            self.add_buttons(ResistButton())
+        for user_id, resist_result in roll_result.resistance_rolls.items():
+            (username, avatar) = context.get_avatar(user_id)
+            dice = resist_result.render_roll_with_glitch(context)
+            net_hits = resist_result.hits_limited - roll_result.cast.hits_limited
+            outcome = "Succeeded!" if net_hits >= 0 else "Failed!"
+            txt = f"**{username}** resists:\n{dice}\n**{outcome}** ({net_hits:+d} net)"
+            self.add_section(txt, avatar)
+
+        self.add_buttons(EdgeMenuButton(), ResistButton())
 
 
 class BindingRollView(BaseRollView):
@@ -657,7 +732,7 @@ class BindingRollView(BaseRollView):
         else:
             self.add_text("Resisted Drain!")
 
-        self.add_buttons(EdgeMenuButton())
+        self.add_separator()
 
 
 class SpellRollView(BaseRollView):
@@ -672,6 +747,15 @@ class SpellRollView(BaseRollView):
         cast_line = "**Spellcasting:**\n" + roll_result.cast.render_roll_with_glitch(
             context
         )
+        if roll_result.opposition:
+            net_hits = (
+                roll_result.cast.hits_limited - roll_result.opposition.hits_limited
+            )
+            cast_line += (
+                "\nvs.\n"
+                + roll_result.opposition.render_roll_with_glitch(context)
+                + f"\n**{net_hits}** net hits."
+            )
         self.add_text(cast_line)
         self.add_separator()
 
@@ -692,10 +776,21 @@ class SpellRollView(BaseRollView):
                 else f"Took **{-roll_result.drain_net_hits}** Drain!"
             )
             self.add_text(outcome)
-        if roll_result.resistable:
-            self.add_buttons(EdgeMenuButton(), ResistButton())
-        else:
+
+        self.add_separator()
+
+        for user_id, resist_result in roll_result.resistance_rolls.items():
+            (username, avatar) = context.get_avatar(user_id)
+            dice = resist_result.render_roll_with_glitch(context)
+            net_hits = resist_result.hits_limited - roll_result.cast.hits_limited
+            outcome = "Succeeded!" if net_hits >= 0 else "Failed!"
+            txt = f"**{username}** resists:\n{dice}\n**{outcome}** ({net_hits:+d} net)"
+            self.add_section(txt, avatar)
+
+        if roll_result.opposition:
             self.add_buttons(EdgeMenuButton())
+        else:
+            self.add_buttons(EdgeMenuButton(), ResistButton())
 
 
 class SummonRollView(BaseRollView):
@@ -765,6 +860,10 @@ class SummonRollView(BaseRollView):
             or result.drain.glitch == Glitch.GLITCH
         ):
             return 0xCC44CC if result.succeeded else 0xCC4444
+
+        if result.succeeded:
+            return 0x88FF88
+        return 0xFF8888 if result.drain_taken > 0 else 0xFFAA66
 
         if result.succeeded:
             return 0x88FF88

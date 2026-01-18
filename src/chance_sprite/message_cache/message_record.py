@@ -15,3 +15,6 @@ class MessageRecord[R: RollRecordBase]:
     created_at: int
     expires_at: int
     roll_result: R
+
+    def current_owners(self, context):
+        return [self.owner_id, *self.roll_result.current_owners(self, context)]
