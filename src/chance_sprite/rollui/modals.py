@@ -11,7 +11,7 @@ from chance_sprite.rollui.modal_inputs import ValidLabel
 from chance_sprite.sprite_context import InteractionContext
 
 if TYPE_CHECKING:
-    from chance_sprite.rollui.base_roll_view import BaseMenuView
+    from chance_sprite.rollui.base_menu_view import BaseMenuView
 
 
 class NumberInputField(ui.TextInput):

@@ -199,9 +199,11 @@ class FakeUser:
         self.display_avatar = FakeAvatar()
         self.id = 0
 
+
 class FakeMessage:
     def __init__(self) -> None:
         self.id = 0
+
 
 class FakeInteraction:
     def __init__(self) -> None:
@@ -209,19 +211,21 @@ class FakeInteraction:
         self.guild_id = 0
         self.message = FakeMessage()
 
+
 class FakeAvatarStore:
     def __init__(self) -> None:
         pass
 
     def get_avatar(self, a, b):
         return ("", "")
-        
+
 
 class FakeClient:
     def __init__(self) -> None:
         self.message_store = dict()
         self.webhook_handles = dict()
         self.user_avatar_store = FakeAvatarStore()
+
 
 class FakeContext(InteractionContext):
     def __init__(self) -> None:

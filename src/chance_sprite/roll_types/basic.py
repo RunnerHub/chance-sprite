@@ -13,12 +13,14 @@ from chance_sprite.roller import (
     roll_exploding,
     roll_hits,
 )
+from chance_sprite.rollui.modal_inputs import LabeledNumberField
 
 from ..fungen import Desc, roll_command
 from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import ResistableRoll, RollRecordBase
-from ..rollui.base_roll_view import BaseMenuView, BaseRollView
+from ..rollui.base_menu_view import BaseMenuView
+from ..rollui.base_roll_view import BaseRollView
 from ..rollui.roll_accessor import DirectRollAccessor
 from ..rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from ..sprite_context import InteractionContext
@@ -407,7 +409,7 @@ class AvailabilityRollView(BaseRollView):
                 outcome_string += f"**Success**: delivered in **1/{roll_result.net_hits}** standard time"
             if roll_result.adjusted_delivery_time:
                 eta = datetime.now(timezone.utc) + roll_result.adjusted_delivery_time
-                outcome_string += f": {humanize_timedelta(roll_result.adjusted_delivery_time)}\n <t:{int(eta.timestamp())}:f> (<t:{int(eta.timestamp())}:R>)"
+                outcome_string += f": {humanize_timedelta(roll_result.adjusted_delivery_time)}\nETA: <t:{int(eta.timestamp())}:f> (<t:{int(eta.timestamp())}:R>)"
 
         self.add_text(outcome_string)
 
@@ -420,6 +422,7 @@ class AvailabilityRoll(RollRecordBase):
     initiator: HitsResult
     defender: HitsResult
     cost: int | None
+    timestamp: int | None = None  # TODO
 
     @property
     def net_hits(self) -> int:
@@ -467,10 +470,20 @@ class AvailabilityRoll(RollRecordBase):
             getter=lambda r: r.defender, setter=lambda r, v: replace(r, defender=v)
         )
         menu = BaseMenuView(record_id=record.message_id)
-        menu.add_text("Initiator roll:")
+        menu.add_text("Negotiation roll:")
         menu.add_standard_buttons(record.roll_result, initiator_accessor)
-        menu.add_text("Defender roll:")
-        menu.add_standard_buttons(record.roll_result, defender_accessor)
+
+        @menu.modal_button(
+            "±¥",
+            title="Adjust nuyen value",
+            body="Enter the new nuyen value of the goods.",
+            fields=[LabeledNumberField("DV", 0, 9999999, placeholder="e.g. 8000")],
+        )
+        def adjust_dv_button(roll: AvailabilityRoll, nuyen: int) -> AvailabilityRoll:
+            return replace(roll, cost=nuyen)
+
+        menu.add_text("Opposing roll:")
+        menu.add_adjust_dice_button(record.roll_result, defender_accessor)
         await context.send_as_followup(menu)
 
 

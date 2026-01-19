@@ -18,7 +18,7 @@ from chance_sprite.message_cache.roll_record_base import RollRecordBase
 from chance_sprite.message_cache.webhook_handle import WebhookHandle
 
 if TYPE_CHECKING:
-    from chance_sprite.rollui.base_roll_view import BaseMenuView
+    from chance_sprite.rollui.base_menu_view import BaseMenuView
 
 from chance_sprite.sprite_utils import epoch_seconds, has_get_partial_message
 

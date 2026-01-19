@@ -77,7 +77,9 @@ def extract_desc(metadata: list[Any], param_name: str) -> str:
 def build_discord_callback(
     *,
     roll_func: RollFunc,
-    invoke: Callable[[discord.Interaction, Mapping[str, Any]], Coroutine[Any, Any, None]],
+    invoke: Callable[
+        [discord.Interaction, Mapping[str, Any]], Coroutine[Any, Any, None]
+    ],
 ) -> Callable[..., Coroutine[Any, Any, None]]:
     qualified_name = f"{roll_func.__module__}.{roll_func.__qualname__}"
 

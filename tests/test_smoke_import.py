@@ -1,9 +1,7 @@
 import importlib
 import pkgutil
 
-SKIP_PREFIXES = (
-    "chance_sprite.__main__",
-)
+SKIP_PREFIXES = ("chance_sprite.__main__",)
 
 
 def iter_all_modules(root_pkg: str):

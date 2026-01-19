@@ -13,7 +13,9 @@ from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import ResistableRoll, RollRecordBase
 from chance_sprite.result_types import HitsResult
 from chance_sprite.roller import roll_exploding, roll_hits
-from chance_sprite.rollui.base_roll_view import BaseMenuView, BaseRollView
+from chance_sprite.rollui.base_menu_view import BaseMenuView
+from chance_sprite.rollui.base_roll_view import BaseRollView
+from chance_sprite.rollui.modal_inputs import LabeledNumberField
 from chance_sprite.rollui.roll_accessor import DirectRollAccessor
 from chance_sprite.rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from chance_sprite.sprite_context import InteractionContext
@@ -64,6 +66,38 @@ class AlchemyCreateRoll(RollRecordBase):
         menu = BaseMenuView(record_id=record.message_id)
         menu.add_text(f"Alchemy roll for {record.label}")
         menu.add_standard_buttons(record.roll_result, cast_accessor)
+
+        @menu.modal_button(
+            "±F",
+            title="Adjust Force",
+            body="Positive numbers increase the Force, negative numbers decrease it.",
+            fields=[LabeledNumberField("Force", -50, 50)],
+        )
+        def adjust_force_button(
+            roll: AlchemyCreateRoll, force_mod: int
+        ) -> AlchemyCreateRoll:
+            new_limit = (
+                roll.force + force_mod
+                if roll.cast.limit == roll.force
+                else roll.cast.limit
+            )
+            return replace(
+                roll,
+                force=roll.force + force_mod,
+                cast=roll.cast.adjust_limit(new_limit),
+                drain_value=roll.drain_value + force_mod,
+                resist=roll.resist.adjust_dice(force_mod),
+            )
+
+        @menu.modal_button(
+            "±DV",
+            title="Adjust Drain Value Modifier",
+            body="Enter the new drain code, relative to Force.",
+            fields=[LabeledNumberField("DV", -50, 50, placeholder="e.g. -3")],
+        )
+        def adjust_dv_button(roll: AlchemyCreateRoll, dv_mod: int) -> AlchemyCreateRoll:
+            return replace(roll, drain_value=roll.force + dv_mod)
+
         menu.add_text(f"Drain roll for {record.label}")
         menu.add_edge_buttons(record.roll_result, drain_accessor)
         menu.add_adjust_dice_button(record.roll_result, drain_accessor)
@@ -262,6 +296,35 @@ class BindingRoll(RollRecordBase):
         )
         menu.add_text(f"Binding roll for {record.label}")
         menu.add_standard_buttons(record.roll_result, bind_accessor)
+
+        @menu.modal_button(
+            "±F",
+            title="Adjust Force",
+            body="Positive numbers increase the Force, negative numbers decrease it.",
+            fields=[LabeledNumberField("Force", -50, 50)],
+        )
+        def adjust_force_button(roll: BindingRoll, force_mod: int) -> BindingRoll:
+            new_limit = (
+                roll.force + force_mod
+                if roll.bind.limit == roll.force
+                else roll.bind.limit
+            )
+            return replace(
+                roll,
+                force=roll.force + force_mod,
+                bind=roll.bind.adjust_limit(new_limit),
+                resist=roll.resist.adjust_dice(force_mod * 2),
+            )
+
+        @menu.modal_button(
+            "±DV",
+            title="Adjust Drain Value Modifier",
+            body="Positive numbers increase the DV, negative numbers decrease it.",
+            fields=[LabeledNumberField("DV", -50, 50)],
+        )
+        def adjust_dv_button(roll: BindingRoll, dv_mod: int) -> BindingRoll:
+            return replace(roll, drain_adjust=dv_mod)
+
         drain_accessor = DirectRollAccessor[BindingRoll](
             getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
         )
@@ -370,12 +433,40 @@ class SpellRoll(ResistableRoll):
             cast_accessor = DirectRollAccessor[SpellRoll](
                 getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v)
             )
-            menu.add_text(f"Spellcasting roll for {record.label}")
-            menu.add_standard_buttons(record.roll_result, cast_accessor)
-
             drain_accessor = DirectRollAccessor[SpellRoll](
                 getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
             )
+
+            menu.add_text(f"Spellcasting roll for {record.label}")
+            menu.add_standard_buttons(record.roll_result, cast_accessor)
+
+            @menu.modal_button(
+                "±F",
+                title="Adjust Force",
+                body="Positive numbers increase the Force, negative numbers decrease it.",
+                fields=[LabeledNumberField("Force", -50, 50)],
+            )
+            def adjust_force_button(roll: SpellRoll, force_mod: int) -> SpellRoll:
+                new_limit = (
+                    roll.force + force_mod
+                    if roll.cast.limit == roll.force
+                    else roll.cast.limit
+                )
+                return replace(
+                    roll,
+                    force=roll.force + force_mod,
+                    cast=roll.cast.adjust_limit(new_limit),
+                    drain_value=roll.drain_value + force_mod,
+                )
+
+            @menu.modal_button(
+                "±DV",
+                title="Adjust Drain Value Modifier",
+                body="Enter the new drain code, relative to Force.",
+                fields=[LabeledNumberField("DV", -50, 50, placeholder="e.g. -3")],
+            )
+            def adjust_dv_button(roll: SpellRoll, dv_mod: int) -> SpellRoll:
+                return replace(roll, drain_value=roll.force + dv_mod)
 
             menu.add_text(f"Drain roll for {record.label}")
             menu.add_edge_buttons(record.roll_result, drain_accessor)
@@ -499,6 +590,35 @@ class SummonRoll(RollRecordBase):
         menu = BaseMenuView(record_id=record.message_id)
         menu.add_text(f"Summoning roll for {record.label}")
         menu.add_standard_buttons(record.roll_result, summon_accessor)
+
+        @menu.modal_button(
+            "±F",
+            title="Adjust Force",
+            body="Positive numbers increase the Force, negative numbers decrease it.",
+            fields=[LabeledNumberField("Force", -50, 50)],
+        )
+        def adjust_force_button(roll: SummonRoll, force_mod: int) -> SummonRoll:
+            new_limit = (
+                roll.force + force_mod
+                if roll.summon.limit == roll.force
+                else roll.summon.limit
+            )
+            return replace(
+                roll,
+                force=roll.force + force_mod,
+                bind=roll.summon.adjust_limit(new_limit),
+                resist=roll.resist.adjust_dice(force_mod),
+            )
+
+        @menu.modal_button(
+            "±DV",
+            title="Adjust Drain Value Modifier",
+            body="Positive numbers increase the DV, negative numbers decrease it.",
+            fields=[LabeledNumberField("DV", -50, 50)],
+        )
+        def adjust_dv_button(roll: SummonRoll, dv_mod: int) -> SummonRoll:
+            return replace(roll, drain_adjust=dv_mod)
+
         menu.add_text(f"Drain roll for {record.label}")
         menu.add_edge_buttons(record.roll_result, drain_accessor)
         menu.add_adjust_dice_button(record.roll_result, drain_accessor)
@@ -652,7 +772,7 @@ class BindingRollView(BaseRollView):
             label
             + f"\nForce {roll_result.force}"
             + (
-                f" (DV{sign_int(roll_result.drain_adjust)}"
+                f" (DV{sign_int(roll_result.drain_adjust)})"
                 if roll_result.drain_adjust != 0
                 else ""
             )
@@ -699,6 +819,7 @@ class BindingRollView(BaseRollView):
             self.add_text("Resisted Drain!")
 
         self.add_separator()
+        self.add_buttons(EdgeMenuButton())
 
 
 class SpellRollView(BaseRollView):
