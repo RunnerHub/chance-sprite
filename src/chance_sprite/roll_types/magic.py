@@ -13,9 +13,8 @@ from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import ResistableRoll, RollRecordBase
 from chance_sprite.result_types import HitsResult
 from chance_sprite.roller import roll_exploding, roll_hits
-from chance_sprite.rollui.base_roll_view import BaseRollView
-from chance_sprite.rollui.generic_edge_menu import GenericEdgeMenu
-from chance_sprite.rollui.roll_accessor import RollAccessor
+from chance_sprite.rollui.base_roll_view import BaseMenuView, BaseRollView
+from chance_sprite.rollui.roll_accessor import DirectRollAccessor
 from chance_sprite.rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from chance_sprite.sprite_context import InteractionContext
 from chance_sprite.sprite_utils import Glitch, sign_int
@@ -56,27 +55,20 @@ class AlchemyCreateRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        cast_accessor = RollAccessor[AlchemyCreateRoll](
+        cast_accessor = DirectRollAccessor[AlchemyCreateRoll](
             getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v)
         )
-        edge_menu1 = GenericEdgeMenu(
-            f"Edge Alchemy for {record.label}?",
-            cast_accessor,
-            record.message_id,
-            context,
-        )
-        await context.send_as_followup(edge_menu1)
-
-        drain_accessor = RollAccessor[AlchemyCreateRoll](
+        drain_accessor = DirectRollAccessor[AlchemyCreateRoll](
             getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
         )
-        menu2 = GenericEdgeMenu(
-            f"Edge Drain for {record.label}?",
-            drain_accessor,
-            record.message_id,
-            context,
-        )
-        await context.send_as_followup(menu2)
+        menu = BaseMenuView(record_id=record.message_id)
+        menu.add_text(f"Alchemy roll for {record.label}")
+        menu.add_standard_buttons(record.roll_result, cast_accessor)
+        menu.add_text(f"Drain roll for {record.label}")
+        menu.add_edge_buttons(record.roll_result, drain_accessor)
+        menu.add_adjust_dice_button(record.roll_result, drain_accessor)
+
+        await context.send_as_followup(menu)
 
 
 @roll_command(desc="Roll to create an alchemical preparation.")
@@ -138,18 +130,17 @@ class AlchemyActivateRoll(ResistableRoll):
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         user_id = context.interaction.user.id
         if user_id in record.roll_result.resistance_rolls.keys():
-            result_accessor = RollAccessor[AlchemyActivateRoll](
+            menu = BaseMenuView(record_id=record.message_id)
+            resist_accessor = DirectRollAccessor[AlchemyActivateRoll](
                 getter=lambda r: r.resistance_rolls[user_id],
                 setter=lambda r, v: replace(
                     r, resistance_rolls={**r.resistance_rolls, user_id: v}
                 ),
             )
-            menu = GenericEdgeMenu(
-                f"Edge for resisting {record.label}:",
-                result_accessor,
-                record.message_id,
-                context,
-            )
+            menu.add_text(f"Resistance roll for {record.label}")
+            menu.add_edge_buttons(record.roll_result, resist_accessor)
+            menu.add_adjust_dice_button(record.roll_result, resist_accessor)
+
             await context.send_as_followup(menu)
 
     def current_owners(self, record: MessageRecord, context: InteractionContext):
@@ -265,27 +256,19 @@ class BindingRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        bind_accessor = RollAccessor[BindingRoll](
+        menu = BaseMenuView(record_id=record.message_id)
+        bind_accessor = DirectRollAccessor[BindingRoll](
             getter=lambda r: r.bind, setter=lambda r, v: replace(r, bind=v)
         )
-        bind_menu = GenericEdgeMenu(
-            f"Edge Binding for {record.label}?",
-            bind_accessor,
-            record.message_id,
-            context,
-        )
-        await context.send_as_followup(bind_menu)
-
-        drain_accessor = RollAccessor[BindingRoll](
+        menu.add_text(f"Binding roll for {record.label}")
+        menu.add_standard_buttons(record.roll_result, bind_accessor)
+        drain_accessor = DirectRollAccessor[BindingRoll](
             getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
         )
-        drain_menu = GenericEdgeMenu(
-            f"Edge Drain for {record.label}?",
-            drain_accessor,
-            record.message_id,
-            context,
-        )
-        await context.send_as_followup(drain_menu)
+        menu.add_text(f"Drain roll for {record.label}")
+        menu.add_edge_buttons(record.roll_result, drain_accessor)
+        menu.add_adjust_dice_button(record.roll_result, drain_accessor)
+        await context.send_as_followup(menu)
 
 
 @roll_command(desc="Roll to bind a summoned spirit. Costs a task, and reagents.")
@@ -382,42 +365,33 @@ class SpellRoll(ResistableRoll):
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         user_id = context.interaction.user.id
+        menu = BaseMenuView(record_id=record.message_id)
         if user_id == record.owner_id:
-            cast_accessor = RollAccessor[SpellRoll](
+            cast_accessor = DirectRollAccessor[SpellRoll](
                 getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v)
             )
-            edge_menu1 = GenericEdgeMenu(
-                f"Edge Spellcasting for {record.label}?",
-                cast_accessor,
-                record.message_id,
-                context,
-            )
-            await context.send_as_followup(edge_menu1)
+            menu.add_text(f"Spellcasting roll for {record.label}")
+            menu.add_standard_buttons(record.roll_result, cast_accessor)
 
-            drain_accessor = RollAccessor[SpellRoll](
+            drain_accessor = DirectRollAccessor[SpellRoll](
                 getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
             )
-            menu2 = GenericEdgeMenu(
-                f"Edge Drain for {record.label}?",
-                drain_accessor,
-                record.message_id,
-                context,
-            )
-            await context.send_as_followup(menu2)
+
+            menu.add_text(f"Drain roll for {record.label}")
+            menu.add_edge_buttons(record.roll_result, drain_accessor)
+            menu.add_adjust_dice_button(record.roll_result, drain_accessor)
+
         if user_id in record.roll_result.resistance_rolls.keys():
-            result_accessor = RollAccessor[SpellRoll](
+            resist_accessor = DirectRollAccessor[SpellRoll](
                 getter=lambda r: r.resistance_rolls[user_id],
                 setter=lambda r, v: replace(
                     r, resistance_rolls={**r.resistance_rolls, user_id: v}
                 ),
             )
-            menu = GenericEdgeMenu(
-                f"Edge for resisting {record.label}:",
-                result_accessor,
-                record.message_id,
-                context,
-            )
-            await context.send_as_followup(menu)
+            menu.add_text(f"Resistance roll for {record.label}")
+            menu.add_edge_buttons(record.roll_result, resist_accessor)
+            menu.add_adjust_dice_button(record.roll_result, resist_accessor)
+        await context.send_as_followup(menu)
 
     def resistance_target(self) -> int:
         return self.cast.hits_limited
@@ -516,27 +490,19 @@ class SummonRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        summon_accessor = RollAccessor[SummonRoll](
+        summon_accessor = DirectRollAccessor[SummonRoll](
             getter=lambda r: r.summon, setter=lambda r, v: replace(r, summon=v)
         )
-        summon_menu = GenericEdgeMenu(
-            f"Edge Summoning for {record.label}?",
-            summon_accessor,
-            record.message_id,
-            context,
-        )
-        await context.send_as_followup(summon_menu)
-
-        drain_accessor = RollAccessor[SummonRoll](
+        drain_accessor = DirectRollAccessor[SummonRoll](
             getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
         )
-        drain_menu = GenericEdgeMenu(
-            f"Edge Drain for {record.label}?",
-            drain_accessor,
-            record.message_id,
-            context,
-        )
-        await context.send_as_followup(drain_menu)
+        menu = BaseMenuView(record_id=record.message_id)
+        menu.add_text(f"Summoning roll for {record.label}")
+        menu.add_standard_buttons(record.roll_result, summon_accessor)
+        menu.add_text(f"Drain roll for {record.label}")
+        menu.add_edge_buttons(record.roll_result, drain_accessor)
+        menu.add_adjust_dice_button(record.roll_result, drain_accessor)
+        await context.send_as_followup(menu)
 
 
 @roll_command(desc="Roll to summon a spirit.")

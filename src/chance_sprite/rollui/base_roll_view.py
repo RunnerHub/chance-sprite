@@ -97,6 +97,7 @@ class BaseMenuView[R: RollRecordBase](BaseView):
 
     def add_text(self, txt: str):
         self.container.add_item(ui.TextDisplay(txt))
+        self.last_action_row = None
 
     def create_button(
         self,
@@ -175,7 +176,8 @@ class BaseMenuView[R: RollRecordBase](BaseView):
             [disable(button) for button in edge_buttons]
 
         @self.modal_button(
-            "2nd Chance",
+            "♻️",
+            title="2nd Chance",
             body="Use Edge to reroll failures?",
             fields=[],
         )
@@ -186,8 +188,9 @@ class BaseMenuView[R: RollRecordBase](BaseView):
         edge_buttons.append(second_chance_button)
 
         @self.modal_button(
-            "Push Limit",
-            body="Enter your edge to push the limit with exploding dice",
+            "⚡",
+            title="Push Limit",
+            body="Enter your edge score to break the limit with exploding dice.",
             fields=[LabeledNumberField("Edge", 0, 12)],
         )
         def push_limit_button(roll: R, dice: int):
@@ -197,7 +200,8 @@ class BaseMenuView[R: RollRecordBase](BaseView):
         edge_buttons.append(push_limit_button)
 
         @self.modal_button(
-            "Close Call",
+            "🛡️",
+            title="Close Call",
             body="Use Edge to mitigate a glitch?",
             fields=[],
         )
@@ -221,21 +225,27 @@ class BaseMenuView[R: RollRecordBase](BaseView):
 
         return edge_buttons
 
-    def add_standard_buttons(self, record: R, accessor: DirectRollAccessor[R]):
-        self.add_edge_buttons(record, accessor)
-
+    def add_adjust_dice_button(self, record: R, accessor: DirectRollAccessor[R]):
         @self.modal_button(
-            "Adjust Dice",
+            "±🎲",
+            title="Adjust Dice",
             body="Adjust dice pool ±. Rolls are kept.",
             fields=[LabeledNumberField("Dice", -50, 50)],
         )
         def adjust_dice_button(roll: R, dice: int) -> R:
             return accessor.update(roll, accessor.get(roll).adjust_dice(dice))
 
+    def add_adjust_limit_button(self, record: R, accessor: DirectRollAccessor[R]):
         @self.modal_button(
-            "Adjust Limit",
+            "±🚧",
+            title="Adjust Limit",
             body="Enter the new limit.",
             fields=[LabeledNumberField("Limit", 0, 99)],
         )
         def adjust_limit_button(roll: R, limit: int) -> R:
             return accessor.update(roll, replace(accessor.get(roll), limit=limit))
+
+    def add_standard_buttons(self, record: R, accessor: DirectRollAccessor[R]):
+        self.add_edge_buttons(record, accessor)
+        self.add_adjust_dice_button(record, accessor)
+        self.add_adjust_limit_button(record, accessor)
