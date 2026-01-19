@@ -9,15 +9,17 @@ from boltons.cacheutils import cachedproperty
 from discord import app_commands, ui
 
 from chance_sprite.result_types import HitsResult
-from chance_sprite.roller import roll_exploding, roll_hits
+from chance_sprite.roller import (
+    roll_exploding,
+    roll_hits,
+)
 
 from ..fungen import Desc, roll_command
 from ..message_cache import message_codec
 from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import ResistableRoll, RollRecordBase
-from ..rollui.base_roll_view import BaseRollView
-from ..rollui.generic_edge_menu import GenericEdgeMenu
-from ..rollui.roll_accessor import RollAccessor
+from ..rollui.base_roll_view import BaseMenuView, BaseRollView
+from ..rollui.roll_accessor import DirectRollAccessor
 from ..rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from ..sprite_context import InteractionContext
 from ..sprite_utils import color_by_net_hits, humanize_timedelta, plural_s
@@ -84,31 +86,29 @@ class ThresholdRoll(ResistableRoll):
         return ThresholdView(self, label, context)
 
     @classmethod
-    async def send_menu(cls, record: MessageRecord, context: InteractionContext):
+    async def send_menu(
+        cls, record: MessageRecord[ThresholdRoll], context: InteractionContext
+    ):
         user_id = context.interaction.user.id
+        menu = BaseMenuView(record_id=record.message_id)
         if user_id == record.owner_id:
-            result_accessor = RollAccessor[ThresholdRoll](
+            menu.add_text("Threshold roll:")
+            result_accessor = DirectRollAccessor[ThresholdRoll](
                 getter=lambda r: r.result,
                 setter=lambda r, v: replace(r, result=v),
             )
-            menu = GenericEdgeMenu(
-                f"Edge for {record.label}:", result_accessor, record.message_id, context
-            )
-            await context.send_as_followup(menu)
+            menu.add_standard_buttons(record.roll_result, result_accessor)
+
         if user_id in record.roll_result.resistance_rolls.keys():
-            result_accessor = RollAccessor[ThresholdRoll](
+            result_accessor = DirectRollAccessor[ThresholdRoll](
                 getter=lambda r: r.resistance_rolls[user_id],
                 setter=lambda r, v: replace(
                     r, resistance_rolls={**r.resistance_rolls, user_id: v}
                 ),
             )
-            menu = GenericEdgeMenu(
-                f"Edge for resisting {record.label}:",
-                result_accessor,
-                record.message_id,
-                context,
-            )
-            await context.send_as_followup(menu)
+            menu.add_text("Resistance roll:")
+            menu.add_standard_buttons(record.roll_result, result_accessor)
+        await context.send_as_followup(menu)
 
     def resistance_target(self) -> int:
         return self.result.hits_limited
@@ -321,15 +321,17 @@ class OpposedRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        result_accessor = RollAccessor[OpposedRoll](
+        initiator_accessor = DirectRollAccessor[OpposedRoll](
             getter=lambda r: r.initiator, setter=lambda r, v: replace(r, initiator=v)
         )
-        menu = GenericEdgeMenu(
-            f"Edge initiator for {record.label}?",
-            result_accessor,
-            record.message_id,
-            context,
+        defender_accessor = DirectRollAccessor[OpposedRoll](
+            getter=lambda r: r.defender, setter=lambda r, v: replace(r, defender=v)
         )
+        menu = BaseMenuView(record_id=record.message_id)
+        menu.add_text("Initiator roll:")
+        menu.add_standard_buttons(record.roll_result, initiator_accessor)
+        menu.add_text("Defender roll:")
+        menu.add_standard_buttons(record.roll_result, defender_accessor)
         await context.send_as_followup(menu)
 
 
@@ -458,15 +460,17 @@ class AvailabilityRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        result_accessor = RollAccessor[OpposedRoll](
+        initiator_accessor = DirectRollAccessor[AvailabilityRoll](
             getter=lambda r: r.initiator, setter=lambda r, v: replace(r, initiator=v)
         )
-        menu = GenericEdgeMenu(
-            f"Edge initiator for {record.label}?",
-            result_accessor,
-            record.message_id,
-            context,
+        defender_accessor = DirectRollAccessor[AvailabilityRoll](
+            getter=lambda r: r.defender, setter=lambda r, v: replace(r, defender=v)
         )
+        menu = BaseMenuView(record_id=record.message_id)
+        menu.add_text("Initiator roll:")
+        menu.add_standard_buttons(record.roll_result, initiator_accessor)
+        menu.add_text("Defender roll:")
+        menu.add_standard_buttons(record.roll_result, defender_accessor)
         await context.send_as_followup(menu)
 
 

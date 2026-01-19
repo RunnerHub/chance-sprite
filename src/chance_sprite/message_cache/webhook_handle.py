@@ -5,6 +5,5 @@ from dataclasses import dataclass
 class WebhookHandle:
     message_id: int
     webhook_id: int
-    webhook_token: str
     expires_at: int
     original_target: int | None

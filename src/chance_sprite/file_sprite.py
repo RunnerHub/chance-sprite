@@ -1,3 +1,6 @@
+# pyright: reportIndexIssue=false
+# pyright: reportReturnType=false
+
 from __future__ import annotations
 
 import json
@@ -96,7 +99,6 @@ class WriteableFile[K, V](ReadableFile, MutableMapping[K, V]):
 class _CachedEntry[V]:
     value: V
     expires_at: int  # epoch seconds
-
 
 class CacheFile[K, V](ReadableFile, MutableMapping[K, V]):
     _cache_dir = Path(PlatformDirs(appname=APP_NAME, appauthor=False).user_cache_dir)

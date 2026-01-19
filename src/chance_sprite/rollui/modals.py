@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from discord import Interaction, ui
 from discord.utils import MISSING
 
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import ResistableRoll
+from chance_sprite.rollui.modal_inputs import ValidLabel
 from chance_sprite.sprite_context import InteractionContext
+
+if TYPE_CHECKING:
+    from chance_sprite.rollui.base_roll_view import BaseMenuView
 
 
 class NumberInputField(ui.TextInput):
@@ -39,6 +45,38 @@ class NumberInputField(ui.TextInput):
                 f"Pick a number between {self.min_value} and {self.max_value}."
             )
         return input
+
+
+class BuiltModal(ui.Modal):
+    def __init__(
+        self,
+        title: str,
+        *,
+        body: str | None,
+        fields: list[ValidLabel[Any]],
+        view: "BaseMenuView",
+        transform,
+    ):
+        super().__init__(title=title, timeout=None)
+        self._view = view
+        self._transform = transform
+        self._fields = fields
+
+        if body is not None:
+            self.add_item(ui.TextDisplay(body))
+        for f in fields:
+            self.add_item(f)
+
+    async def on_submit(self, interaction: Interaction):
+        try:
+            values = [f.validate() for f in self._fields]
+        except ValueError as e:
+            await interaction.response.send_message(
+                str(e), ephemeral=True, delete_after=5
+            )
+            return
+
+        await self._view.apply_transform(interaction, self._transform, *values)
 
 
 class NumberInputModal(ui.Modal):

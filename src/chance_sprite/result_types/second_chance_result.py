@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import cached_property
 import random
 from dataclasses import dataclass, replace
 
@@ -14,7 +15,7 @@ class SecondChanceHitsResult(HitsResult):
     rerolled_dice: tuple[int, ...]
     rerolled_hits: int
 
-    @property
+    @cached_property
     def hits_limited(self):
         total_hits = self.dice_hits + self.rerolled_hits
         if self.limit > 0:

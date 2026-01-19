@@ -146,7 +146,7 @@ class GenericEdgeMenu(BaseMenuView):
         original_message_id: int,
         context: InteractionContext,
     ):
-        super().__init__()
+        super().__init__(original_message_id)
         self.result_accessor = result_accessor
         self.original_message_id = original_message_id
         self.title = title

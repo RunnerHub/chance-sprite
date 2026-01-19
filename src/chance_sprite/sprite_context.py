@@ -4,6 +4,7 @@ import logging
 import sys
 from dataclasses import replace
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from discord import (
     DMChannel,
@@ -15,7 +16,10 @@ from discord import (
 from chance_sprite.message_cache.message_record import MessageRecord
 from chance_sprite.message_cache.roll_record_base import RollRecordBase
 from chance_sprite.message_cache.webhook_handle import WebhookHandle
-from chance_sprite.rollui.base_roll_view import BaseMenuView
+
+if TYPE_CHECKING:
+    from chance_sprite.rollui.base_roll_view import BaseMenuView
+
 from chance_sprite.sprite_utils import epoch_seconds, has_get_partial_message
 
 log = logging.getLogger(__name__)
@@ -112,6 +116,14 @@ class InteractionContext:
         except Exception as e:
             log.info("Failed to edit interaction via partial message: %s", e)
 
+    async def update_menu(self, view: "BaseMenuView"):
+        if self.interaction.message:
+            await self.interaction.followup.edit_message(
+                self.interaction.message.id, view=view
+            )
+        else:
+            log.error("couldn't edit interaction message")
+
     async def transmit_result(self, label: str, result: RollRecordBase):
         interaction = self.interaction
         primary_view = result.build_view(label, self)
@@ -176,7 +188,7 @@ class InteractionContext:
                     e,
                 )
 
-    async def send_as_followup(self, menu: BaseMenuView):
+    async def send_as_followup(self, menu: "BaseMenuView"):
         original_message_id = (
             self.interaction.message.id if self.interaction.message else None
         )
@@ -184,16 +196,12 @@ class InteractionContext:
             view=menu, wait=True, ephemeral=True
         )
         webhook_id = self.interaction.followup.id
-        token = self.interaction.followup.auth_token or ""
         message_id = followup_message.id
         expires_at = epoch_seconds() + 890  # 15 mins - 10 seconds
         handle = WebhookHandle(
             message_id,
             webhook_id,
-            token,
             expires_at,
             original_target=original_message_id,
         )
         self.client.webhook_handles.set(message_id, handle, expires_at=expires_at)
-        menu.followup_message = followup_message
-        # self.followup_message = await interaction.edit_original_response(view=self)

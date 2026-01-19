@@ -30,3 +30,19 @@ class RollAccessor[R: RollRecordBase](GenericResultAccessor):
 
     def update(self, record: MessageRecord[R], new_result: HitsResult) -> R:
         return self._set(record.roll_result, new_result)
+
+
+class DirectRollAccessor[R: RollRecordBase]:
+    def __init__(
+        self,
+        getter: Callable[[R], HitsResult],
+        setter: Callable[[R, HitsResult], R],
+    ):
+        self._get = getter
+        self._set = setter
+
+    def get(self, roll: R) -> HitsResult:
+        return self._get(roll)
+
+    def update(self, roll: R, new_result: HitsResult) -> R:
+        return self._set(roll, new_result)
