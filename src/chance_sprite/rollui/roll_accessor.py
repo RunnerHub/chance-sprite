@@ -4,7 +4,7 @@ from chance_sprite.message_cache.roll_record_base import RollRecordBase
 from chance_sprite.result_types.hits_result import HitsResult
 
 
-class DirectRollAccessor[R: RollRecordBase]:
+class RollAccessor[R: RollRecordBase]:
     def __init__(
         self,
         getter: Callable[[R], HitsResult],

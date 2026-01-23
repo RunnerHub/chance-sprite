@@ -66,23 +66,6 @@ class DiscordSprite(commands.Bot):
         if self.enable_global_sync:
             await self.tree.sync()
 
-        # Fast sync (for testing mainly, causes double command registration if command name matches)
-        log.info("Trying fast sync")
-        guilds = (
-            self.config["fastpush_guilds"] if "fastpush_guilds" in self.config else None
-        )
-        if guilds:
-            for guild_id in self.config["fastpush_guilds"]:
-                try:
-                    log.info(f"Fast syncing {guild_id}...")
-                    guild = discord.Object(id=guild_id)
-                    self.tree.copy_global_to(guild=guild)
-                    # self.tree.clear_commands(guild=guild)
-                    await self.tree.sync(guild=guild)
-                    log.info("done.")
-                except Exception as e:
-                    log.info("errored: %s", e)
-
     async def on_ready(self) -> None:
         if self.user:
             print(f"Logged in as {self.user} (id={self.user.id})")

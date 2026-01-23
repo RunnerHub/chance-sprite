@@ -7,7 +7,8 @@ from discord import ButtonStyle, Interaction, InteractionMessage, ui
 
 from chance_sprite.message_cache.roll_record_base import ResistableRoll
 from chance_sprite.rollui.base_roll_view import BaseView
-from chance_sprite.rollui.modals import InPlaceResistModal
+from chance_sprite.rollui.modal_inputs import LabeledBooleanField, LabeledNumberField
+from chance_sprite.rollui.modals import BuiltModal
 from chance_sprite.sprite_context import InteractionContext
 
 log = logging.getLogger(__name__)
@@ -101,6 +102,41 @@ class ResistButton(ui.Button):
                 )
                 return
 
-            await interaction.response.send_modal(InPlaceResistModal(message_record))
+            def transform(roll: ResistableRoll, context: InteractionContext, dice: int, limit: int, pre_edge: bool):
+                record = context.get_cached_record(msg.id)
+                if len(record.roll_result.already_resisted()) < 10:
+                    return roll.resist(context, dice, limit=limit, pre_edge=pre_edge)
+                else:
+                    raise ValueError("Too many resistors!")
+
+            async def on_fail(
+                roll: ResistableRoll, context: InteractionContext, dice: int, limit: int, pre_edge: bool
+            ):
+                from chance_sprite.roll_types.basic import roll_simple
+
+                record = context.get_cached_record(msg.id)
+                threshold = roll.resistance_target()
+                threshold_roll = roll_simple(dice=dice, threshold=threshold, limit=limit, pre_edge=pre_edge)
+                await context.transmit_result(
+                    f"Resisting {record.label} ({threshold})", threshold_roll
+                )
+
+            modal = BuiltModal(
+                title="Resistance roll",
+                body=f"Rolling to resist {message_record.label} ({roll_result.resistance_target()} hits)",
+                fields=[
+                    LabeledNumberField("Number of Dice", 0, 99),
+                    LabeledNumberField("Limit (if applicable)", 0, 99, required=False),
+                    LabeledBooleanField(
+                        "Pre-edge? (add your edge above, if so)",
+                        default=False,
+                    ),
+                ],
+                menu_view=None,
+                original_view_id=msg.id,
+                transform=transform,
+                on_fail=on_fail,
+            )
+            await interaction.response.send_modal(modal)
             interaction_message = await interaction.original_response()
             context.cache_message_handle(interaction_message)

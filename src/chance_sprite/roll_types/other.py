@@ -6,6 +6,8 @@ from enum import Enum
 from typing import Annotated
 
 from discord import app_commands, ui
+from discord.app_commands import Range
+
 
 from chance_sprite.result_types import AdditiveResult
 
@@ -134,13 +136,13 @@ class InitiativeRoll(RollRecordBase):
 def roll_initiative(
     *,
     base: Annotated[
-        app_commands.Range[int, -50, 50],
+        Range[int, -50, 50],
         Desc(
             "Base initiative value, before dice (usually REA+INT). Can be negative e.g. if you are surprised."
         ),
     ],
     dice: Annotated[
-        app_commands.Range[int, 1, 5],
+        Range[int, 1, 5],
         Desc("Number of initiative dice (1-5)"),
     ],
 ) -> InitiativeRoll:
