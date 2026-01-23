@@ -49,10 +49,6 @@ class BuiltModal(ui.Modal):
 
         record = context.get_cached_record(self._origin_id)
 
-        # TODO: reassess ownership gating
-        if interaction.user.id not in record.current_owners(context):
-            return
-
         new_record = self._transform(record.roll_result, context, *values)
         try:
             await context.update_original(record, new_record)

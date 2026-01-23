@@ -102,7 +102,13 @@ class ResistButton(ui.Button):
                 )
                 return
 
-            def transform(roll: ResistableRoll, context: InteractionContext, dice: int, limit: int, pre_edge: bool):
+            def transform(
+                roll: ResistableRoll,
+                context: InteractionContext,
+                dice: int,
+                limit: int,
+                pre_edge: bool,
+            ):
                 record = context.get_cached_record(msg.id)
                 if len(record.roll_result.already_resisted()) < 10:
                     return roll.resist(context, dice, limit=limit, pre_edge=pre_edge)
@@ -110,13 +116,19 @@ class ResistButton(ui.Button):
                     raise ValueError("Too many resistors!")
 
             async def on_fail(
-                roll: ResistableRoll, context: InteractionContext, dice: int, limit: int, pre_edge: bool
+                roll: ResistableRoll,
+                context: InteractionContext,
+                dice: int,
+                limit: int,
+                pre_edge: bool,
             ):
                 from chance_sprite.roll_types.basic import roll_simple
 
                 record = context.get_cached_record(msg.id)
                 threshold = roll.resistance_target()
-                threshold_roll = roll_simple(dice=dice, threshold=threshold, limit=limit, pre_edge=pre_edge)
+                threshold_roll = roll_simple(
+                    dice=dice, threshold=threshold, limit=limit, pre_edge=pre_edge
+                )
                 await context.transmit_result(
                     f"Resisting {record.label} ({threshold})", threshold_roll
                 )
