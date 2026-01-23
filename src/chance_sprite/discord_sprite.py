@@ -55,17 +55,6 @@ class DiscordSprite(commands.Bot):
         log.info(f"Global sync: {self.enable_global_sync}")
         self.tree.clear_commands(guild=None)
 
-        if not self.enable_global_sync:
-            await self.tree.sync()
-
-        # Load cogs/extensions
-        for ext in EXTENSIONS:
-            await self.load_extension(ext)
-
-        # Global sync (slow propagation).
-        if self.enable_global_sync:
-            await self.tree.sync()
-
         # Fast sync (for testing mainly, causes double command registration if command name matches)
         log.info("Trying fast sync")
         guilds = (
@@ -82,6 +71,17 @@ class DiscordSprite(commands.Bot):
                     log.info("done.")
                 except Exception as e:
                     log.info("errored: %s", e)
+
+        if not self.enable_global_sync:
+            await self.tree.sync()
+
+        # Load cogs/extensions
+        for ext in EXTENSIONS:
+            await self.load_extension(ext)
+
+        # Global sync (slow propagation).
+        if self.enable_global_sync:
+            await self.tree.sync()
 
     async def on_ready(self) -> None:
         if self.user:

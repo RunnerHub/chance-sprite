@@ -40,6 +40,6 @@ class ResistableRoll(RollRecordBase):
 
     @abstractmethod
     def resist(
-        self, record: MessageRecord, context: InteractionContext, dice: int
+        self, context: InteractionContext, dice: int, limit: int, pre_edge: bool
     ) -> ResistableRoll:
         raise NotImplementedError

@@ -8,7 +8,7 @@ from chance_sprite.result_types.hits_result import HitsResult
 from chance_sprite.roller import close_call, push_the_limit, second_chance
 from chance_sprite.rollui.base_roll_view import BaseView
 from chance_sprite.rollui.modal_inputs import LabeledNumberField, ValidLabel
-from chance_sprite.rollui.roll_accessor import DirectRollAccessor
+from chance_sprite.rollui.roll_accessor import RollAccessor
 from chance_sprite.sprite_context import InteractionContext
 from chance_sprite.sprite_utils import Glitch
 
@@ -72,7 +72,8 @@ class BaseMenuView[R: RollRecordBase](BaseView):
                     title=title or label,
                     body=body,
                     fields=list(fields or []),
-                    view=self,
+                    menu_view=self,
+                    original_view_id=self.record_id,
                     transform=transform,
                 )
                 await interaction.response.send_modal(modal)
@@ -82,26 +83,7 @@ class BaseMenuView[R: RollRecordBase](BaseView):
 
         return _decorator
 
-    async def apply_transform(
-        self,
-        interaction: Interaction,
-        transform: Callable[..., RollRecordBase],
-        *args,
-    ) -> None:
-        context = InteractionContext(interaction)
-        record = context.get_cached_record(self.record_id)
-
-        # TODO: reassess ownership gating
-        if interaction.user.id not in record.current_owners(context):
-            return
-
-        new_record = transform(record.roll_result, *args)
-
-        await context.update_original(record, new_record)
-
-        await context.update_menu(self)
-
-    def add_edge_buttons(self, record: R, accessor: DirectRollAccessor[R]):
+    def add_edge_buttons(self, record: R, accessor: RollAccessor[R]):
         initial_result = accessor.get(record)
         edge_buttons = list[ui.Button]()
 
@@ -118,7 +100,7 @@ class BaseMenuView[R: RollRecordBase](BaseView):
             body="Use Edge to reroll failures?",
             fields=[],
         )
-        def second_chance_button(roll: R):
+        def second_chance_button(roll: R, context: InteractionContext):
             disable_all()
             return accessor.update(roll, second_chance(accessor.get(roll)))
 
@@ -130,7 +112,7 @@ class BaseMenuView[R: RollRecordBase](BaseView):
             body="Enter your edge score to break the limit with exploding dice.",
             fields=[LabeledNumberField("Edge", 0, 12)],
         )
-        def push_limit_button(roll: R, dice: int):
+        def push_limit_button(roll: R, context: InteractionContext, dice: int):
             disable_all()
             return accessor.update(roll, push_the_limit(accessor.get(roll), dice))
 
@@ -142,7 +124,7 @@ class BaseMenuView[R: RollRecordBase](BaseView):
             body="Use Edge to mitigate a glitch?",
             fields=[],
         )
-        def close_call_button(roll: R):
+        def close_call_button(roll: R, context: InteractionContext):
             disable_all()
             return accessor.update(roll, close_call(accessor.get(roll)))
 
@@ -162,27 +144,27 @@ class BaseMenuView[R: RollRecordBase](BaseView):
 
         return edge_buttons
 
-    def add_adjust_dice_button(self, record: R, accessor: DirectRollAccessor[R]):
+    def add_adjust_dice_button(self, record: R, accessor: RollAccessor[R]):
         @self.modal_button(
             "±🎲",
             title="Adjust Dice",
             body="Adjust dice pool ±. Rolls are kept.",
             fields=[LabeledNumberField("Dice", -50, 50)],
         )
-        def adjust_dice_button(roll: R, dice: int) -> R:
+        def adjust_dice_button(roll: R, context: InteractionContext, dice: int) -> R:
             return accessor.update(roll, accessor.get(roll).adjust_dice(dice))
 
-    def add_adjust_limit_button(self, record: R, accessor: DirectRollAccessor[R]):
+    def add_adjust_limit_button(self, record: R, accessor: RollAccessor[R]):
         @self.modal_button(
             "±🚧",
             title="Adjust Limit",
             body="Enter the new limit.",
             fields=[LabeledNumberField("Limit", 0, 99)],
         )
-        def adjust_limit_button(roll: R, limit: int) -> R:
+        def adjust_limit_button(roll: R, context: InteractionContext, limit: int) -> R:
             return accessor.update(roll, replace(accessor.get(roll), limit=limit))
 
-    def add_standard_buttons(self, record: R, accessor: DirectRollAccessor[R]):
+    def add_standard_buttons(self, record: R, accessor: RollAccessor[R]):
         self.add_edge_buttons(record, accessor)
         self.add_adjust_dice_button(record, accessor)
         self.add_adjust_limit_button(record, accessor)

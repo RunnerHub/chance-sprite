@@ -35,19 +35,19 @@ class MessageCodec:
                         self.registry[tag] = obj
 
     def register(self, tag: str):
-        def deco(cls: type):
+        def decorator(cls: type):
             self.registry[tag] = cls
             setattr(cls, "__tag__", tag)
             return cls
 
-        return deco
+        return decorator
 
     def alias(self, tag: str):
-        def deco(cls: type):
+        def decorator(cls: type):
             self.registry[tag] = cls
             return cls
 
-        return deco
+        return decorator
 
     def decode_with_hint(self, value, hint):
         # If it's a tagged dict, dispatch regardless of hint

@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional, override
 
 from boltons.cacheutils import cachedproperty
-from discord import app_commands, ui
+from discord import ui
+from discord.app_commands import Range
 
 from chance_sprite.result_types import HitsResult
 from chance_sprite.roller import (
@@ -21,7 +22,7 @@ from ..message_cache.message_record import MessageRecord
 from ..message_cache.roll_record_base import ResistableRoll, RollRecordBase
 from ..rollui.base_menu_view import BaseMenuView
 from ..rollui.base_roll_view import BaseRollView
-from ..rollui.roll_accessor import DirectRollAccessor
+from ..rollui.roll_accessor import RollAccessor
 from ..rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from ..sprite_context import InteractionContext
 from ..sprite_utils import color_by_net_hits, humanize_timedelta, plural_s
@@ -95,14 +96,25 @@ class ThresholdRoll(ResistableRoll):
         menu = BaseMenuView(record_id=record.message_id)
         if user_id == record.owner_id:
             menu.add_text("Threshold roll:")
-            result_accessor = DirectRollAccessor[ThresholdRoll](
+            result_accessor = RollAccessor[ThresholdRoll](
                 getter=lambda r: r.result,
                 setter=lambda r, v: replace(r, result=v),
             )
             menu.add_standard_buttons(record.roll_result, result_accessor)
 
+        @menu.modal_button(
+            "±TH",
+            title="Adjust Threshold",
+            body="Enter the new threshold, or 0 for none.",
+            fields=[LabeledNumberField("TH", 0, 99, placeholder="e.g. 3")],
+        )
+        def adjust_threshold_button(
+            roll: ThresholdRoll, context: InteractionContext, threshold: int
+        ) -> ThresholdRoll:
+            return replace(roll, threshold=threshold)
+
         if user_id in record.roll_result.resistance_rolls.keys():
-            result_accessor = DirectRollAccessor[ThresholdRoll](
+            result_accessor = RollAccessor[ThresholdRoll](
                 getter=lambda r: r.resistance_rolls[user_id],
                 setter=lambda r, v: replace(
                     r, resistance_rolls={**r.resistance_rolls, user_id: v}
@@ -119,9 +131,12 @@ class ThresholdRoll(ResistableRoll):
         return [record.owner_id, *self.resistance_rolls.keys()]
 
     def resist(
-        self, record: MessageRecord, context: InteractionContext, dice: int
+        self, context: InteractionContext, dice: int, limit: int, pre_edge: bool
     ) -> ResistableRoll:
-        resist_roll = roll_hits(dice, limit=0, gremlins=0)
+        if pre_edge:
+            resist_roll = roll_exploding(dice, limit=limit, gremlins=0)
+        else:
+            resist_roll = roll_hits(dice, limit=limit, gremlins=0)
         user_id = context.interaction.user.id
         return replace(
             self, resistance_rolls={**self.resistance_rolls, user_id: resist_roll}
@@ -134,16 +149,14 @@ class ThresholdRoll(ResistableRoll):
 @roll_command(desc="Roll some d6s, Shadowrun-style.")
 def roll_simple(
     *,
-    dice: Annotated[app_commands.Range[int, 1, 99], Desc("Number of dice (1-99).")],
-    threshold: Annotated[
-        app_commands.Range[int, 0, 99], Desc("Threshold to reach (0 if none).")
-    ],
+    dice: Annotated[Range[int, 1, 99], Desc("Number of dice (1-99).")],
+    threshold: Annotated[Range[int, 0, 99], Desc("Threshold to reach (0 if none).")],
     limit: Annotated[
-        app_commands.Range[int, 0, 99],
+        Range[int, 0, 99],
         Desc("The limit associated with the roll (0 if none)."),
     ],
     gremlins: Annotated[
-        app_commands.Range[int, 0, 4],
+        Range[int, 0, 4],
         Desc("Reduces 1s needed to glitch. Gremlins, Social Stress, etc."),
     ] = 0,
     pre_edge: Annotated[bool, Desc("Pre-edge Break the Limit.")] = False,
@@ -232,18 +245,14 @@ class ExtendedRoll(RollRecordBase):
 )
 def roll_extended(
     *,
-    dice: Annotated[app_commands.Range[int, 1, 99], Desc("Starting dice pool (1-99).")],
-    threshold: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Total hits needed (>=1).")
-    ],
+    dice: Annotated[Range[int, 1, 99], Desc("Starting dice pool (1-99).")],
+    threshold: Annotated[Range[int, 1, 99], Desc("Total hits needed (>=1).")],
     max_iters: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Maximum number of rolls (1-99).")
+        Range[int, 1, 99], Desc("Maximum number of rolls (1-99).")
     ] = 10,
-    limit: Annotated[
-        app_commands.Range[int, 0, 99], Desc("Limit applicable to each roll.")
-    ] = 0,
+    limit: Annotated[Range[int, 0, 99], Desc("Limit applicable to each roll.")] = 0,
     gremlins: Annotated[
-        Optional[app_commands.Range[int, 0, 4]],
+        Optional[Range[int, 0, 4]],
         Desc("Reduce the number of 1s required for a glitch."),
     ] = 0,
 ) -> ExtendedRoll:
@@ -323,10 +332,10 @@ class OpposedRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        initiator_accessor = DirectRollAccessor[OpposedRoll](
+        initiator_accessor = RollAccessor[OpposedRoll](
             getter=lambda r: r.initiator, setter=lambda r, v: replace(r, initiator=v)
         )
-        defender_accessor = DirectRollAccessor[OpposedRoll](
+        defender_accessor = RollAccessor[OpposedRoll](
             getter=lambda r: r.defender, setter=lambda r, v: replace(r, defender=v)
         )
         menu = BaseMenuView(record_id=record.message_id)
@@ -340,24 +349,20 @@ class OpposedRoll(RollRecordBase):
 @roll_command(desc="Opposed roll: initiator vs defender. Defender wins ties.")
 def roll_opposed(
     *,
-    initiator_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Initiator dice pool (1-99).")
-    ],
-    defender_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Defender dice pool (1-99).")
-    ],
+    initiator_dice: Annotated[Range[int, 1, 99], Desc("Initiator dice pool (1-99).")],
+    defender_dice: Annotated[Range[int, 1, 99], Desc("Defender dice pool (1-99).")],
     initiator_limit: Annotated[
-        app_commands.Range[int, 0, 99], Desc("Initiator's limit, accuracy, etc.")
+        Range[int, 0, 99], Desc("Initiator's limit, accuracy, etc.")
     ],
     defender_limit: Annotated[
-        app_commands.Range[int, 0, 99], Desc("Defender's limit, if applicable.")
+        Range[int, 0, 99], Desc("Defender's limit, if applicable.")
     ] = 0,
     initiator_gremlins: Annotated[
-        app_commands.Range[int, 0, 4],
+        Range[int, 0, 4],
         Desc("Reduce the number of 1s required for a glitch."),
     ] = 0,
     defender_gremlins: Annotated[
-        app_commands.Range[int, 0, 4],
+        Range[int, 0, 4],
         Desc("Reduce the number of 1s required for a glitch."),
     ] = 0,
     pre_edge: Annotated[bool, Desc("Initiator can pre-edge: Break the Limit.")] = False,
@@ -463,10 +468,10 @@ class AvailabilityRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        initiator_accessor = DirectRollAccessor[AvailabilityRoll](
+        initiator_accessor = RollAccessor[AvailabilityRoll](
             getter=lambda r: r.initiator, setter=lambda r, v: replace(r, initiator=v)
         )
-        defender_accessor = DirectRollAccessor[AvailabilityRoll](
+        defender_accessor = RollAccessor[AvailabilityRoll](
             getter=lambda r: r.defender, setter=lambda r, v: replace(r, defender=v)
         )
         menu = BaseMenuView(record_id=record.message_id)
@@ -479,7 +484,9 @@ class AvailabilityRoll(RollRecordBase):
             body="Enter the new nuyen value of the goods.",
             fields=[LabeledNumberField("DV", 0, 9999999, placeholder="e.g. 8000")],
         )
-        def adjust_dv_button(roll: AvailabilityRoll, nuyen: int) -> AvailabilityRoll:
+        def adjust_dv_button(
+            roll: AvailabilityRoll, context: InteractionContext, nuyen: int
+        ) -> AvailabilityRoll:
             return replace(roll, cost=nuyen)
 
         menu.add_text("Opposing roll:")
@@ -491,21 +498,19 @@ class AvailabilityRoll(RollRecordBase):
 def roll_availability(
     *,
     acquisition_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice for the negotiation test.")
+        Range[int, 1, 99], Desc("Dice for the negotiation test.")
     ],
     availability: Annotated[
-        app_commands.Range[int, 0, 99],
+        Range[int, 0, 99],
         Desc("Availability of the desired item (opposes your roll)."),
     ],
-    social_limit: Annotated[
-        app_commands.Range[int, 0, 99], Desc("Social limit if applicable.")
-    ] = 0,
+    social_limit: Annotated[Range[int, 0, 99], Desc("Social limit if applicable.")] = 0,
     cost: Annotated[
-        Optional[app_commands.Range[int, 0, 1000000]],
+        Optional[Range[int, 0, 1000000]],
         Desc("Cost of the item in nuyen."),
     ] = None,
     street_cred_mod: Annotated[
-        app_commands.Range[int, -99, 99],
+        Range[int, -99, 99],
         Desc(
             "-1 for every 10 street cred (optional, you can just factor it in yourself)."
         ),

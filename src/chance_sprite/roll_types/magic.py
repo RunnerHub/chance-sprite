@@ -5,7 +5,8 @@ import logging
 from dataclasses import dataclass, field, replace
 from typing import Annotated, Optional
 
-from discord import app_commands, ui
+from discord import ui
+from discord.app_commands import Range
 
 from chance_sprite.fungen import Desc, roll_command
 from chance_sprite.message_cache import message_codec
@@ -16,7 +17,7 @@ from chance_sprite.roller import roll_exploding, roll_hits
 from chance_sprite.rollui.base_menu_view import BaseMenuView
 from chance_sprite.rollui.base_roll_view import BaseRollView
 from chance_sprite.rollui.modal_inputs import LabeledNumberField
-from chance_sprite.rollui.roll_accessor import DirectRollAccessor
+from chance_sprite.rollui.roll_accessor import RollAccessor
 from chance_sprite.rollui.roll_view_persist import EdgeMenuButton, ResistButton
 from chance_sprite.sprite_context import InteractionContext
 from chance_sprite.sprite_utils import Glitch, sign_int
@@ -57,10 +58,10 @@ class AlchemyCreateRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        cast_accessor = DirectRollAccessor[AlchemyCreateRoll](
+        cast_accessor = RollAccessor[AlchemyCreateRoll](
             getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v)
         )
-        drain_accessor = DirectRollAccessor[AlchemyCreateRoll](
+        drain_accessor = RollAccessor[AlchemyCreateRoll](
             getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
         )
         menu = BaseMenuView(record_id=record.message_id)
@@ -74,7 +75,7 @@ class AlchemyCreateRoll(RollRecordBase):
             fields=[LabeledNumberField("Force", -50, 50)],
         )
         def adjust_force_button(
-            roll: AlchemyCreateRoll, force_mod: int
+            roll: AlchemyCreateRoll, context: InteractionContext, force_mod: int
         ) -> AlchemyCreateRoll:
             new_limit = (
                 roll.force + force_mod
@@ -95,7 +96,7 @@ class AlchemyCreateRoll(RollRecordBase):
             body="Enter the new drain code, relative to Force.",
             fields=[LabeledNumberField("DV", -50, 50, placeholder="e.g. -3")],
         )
-        def adjust_dv_button(roll: AlchemyCreateRoll, dv_mod: int) -> AlchemyCreateRoll:
+        def adjust_dv_button(roll: AlchemyCreateRoll, context: InteractionContext, dv_mod: int) -> AlchemyCreateRoll:
             return replace(roll, drain_value=roll.force + dv_mod)
 
         menu.add_text(f"Drain roll for {record.label}")
@@ -109,21 +110,17 @@ class AlchemyCreateRoll(RollRecordBase):
 def roll_alchemy_create(
     *,
     force: Annotated[
-        app_commands.Range[int, 1, 50],
+        Range[int, 1, 50],
         Desc("Force of the alchemical preparation attempt."),
     ],
-    alchemy_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice pool for alchemy.")
-    ],
+    alchemy_dice: Annotated[Range[int, 1, 99], Desc("Dice pool for alchemy.")],
     drain_code: Annotated[
-        app_commands.Range[int, -50, 50],
+        Range[int, -50, 50],
         Desc("Drain value modifier, relative to Force. e.g. `-3`"),
     ],
-    drain_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")
-    ],
+    drain_dice: Annotated[Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
     limit_override: Annotated[
-        Optional[app_commands.Range[int, 0, 50]],
+        Optional[Range[int, 0, 50]],
         Desc("Optional limit override (defaults to Force)."),
     ] = None,
     pre_edge: Annotated[
@@ -165,7 +162,7 @@ class AlchemyActivateRoll(ResistableRoll):
         user_id = context.interaction.user.id
         if user_id in record.roll_result.resistance_rolls.keys():
             menu = BaseMenuView(record_id=record.message_id)
-            resist_accessor = DirectRollAccessor[AlchemyActivateRoll](
+            resist_accessor = RollAccessor[AlchemyActivateRoll](
                 getter=lambda r: r.resistance_rolls[user_id],
                 setter=lambda r, v: replace(
                     r, resistance_rolls={**r.resistance_rolls, user_id: v}
@@ -187,26 +184,26 @@ class AlchemyActivateRoll(ResistableRoll):
         return [*self.resistance_rolls.keys()]
 
     def resist(
-        self, record: MessageRecord, context: InteractionContext, dice: int
+        self, context: InteractionContext, dice: int, limit: int, pre_edge: bool
     ) -> ResistableRoll:
-        resist_roll = roll_hits(dice, limit=0, gremlins=0)
+        if pre_edge:
+            resist_roll = roll_exploding(dice, limit=limit, gremlins=0)
+        else:
+            resist_roll = roll_hits(dice, limit=limit, gremlins=0)
         user_id = context.interaction.user.id
         return replace(
             self, resistance_rolls={**self.resistance_rolls, user_id: resist_roll}
         )
 
-
 @roll_command(desc="Roll to activate an existing alchemical preparation.")
 def roll_alchemy_activate(
     *,
-    force: Annotated[
-        app_commands.Range[int, 1, 50], Desc("Force of the alchemical preparation.")
-    ],
+    force: Annotated[Range[int, 1, 50], Desc("Force of the alchemical preparation.")],
     potency: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Potency of the alchemical preparation.")
+        Range[int, 1, 99], Desc("Potency of the alchemical preparation.")
     ],
     practiced: Annotated[
-        app_commands.Range[int, -50, 50],
+        Range[int, -50, 50],
         Desc("Any dice bonus from Practiced Alchemist"),
     ] = 0,
     resistable: Annotated[
@@ -291,7 +288,7 @@ class BindingRoll(RollRecordBase):
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
         menu = BaseMenuView(record_id=record.message_id)
-        bind_accessor = DirectRollAccessor[BindingRoll](
+        bind_accessor = RollAccessor[BindingRoll](
             getter=lambda r: r.bind, setter=lambda r, v: replace(r, bind=v)
         )
         menu.add_text(f"Binding roll for {record.label}")
@@ -303,7 +300,7 @@ class BindingRoll(RollRecordBase):
             body="Positive numbers increase the Force, negative numbers decrease it.",
             fields=[LabeledNumberField("Force", -50, 50)],
         )
-        def adjust_force_button(roll: BindingRoll, force_mod: int) -> BindingRoll:
+        def adjust_force_button(roll: BindingRoll, context: InteractionContext, force_mod: int) -> BindingRoll:
             new_limit = (
                 roll.force + force_mod
                 if roll.bind.limit == roll.force
@@ -322,10 +319,10 @@ class BindingRoll(RollRecordBase):
             body="Positive numbers increase the DV, negative numbers decrease it.",
             fields=[LabeledNumberField("DV", -50, 50)],
         )
-        def adjust_dv_button(roll: BindingRoll, dv_mod: int) -> BindingRoll:
+        def adjust_dv_button(roll: BindingRoll, context: InteractionContext, dv_mod: int) -> BindingRoll:
             return replace(roll, drain_adjust=dv_mod)
 
-        drain_accessor = DirectRollAccessor[BindingRoll](
+        drain_accessor = RollAccessor[BindingRoll](
             getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
         )
         menu.add_text(f"Drain roll for {record.label}")
@@ -337,22 +334,18 @@ class BindingRoll(RollRecordBase):
 @roll_command(desc="Roll to bind a summoned spirit. Costs a task, and reagents.")
 def roll_binding(
     *,
-    force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spirit.")],
-    bind_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice pool for binding.")
-    ],
-    drain_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")
-    ],
+    force: Annotated[Range[int, 1, 50], Desc("Force of the spirit.")],
+    bind_dice: Annotated[Range[int, 1, 99], Desc("Dice pool for binding.")],
+    drain_dice: Annotated[Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
     services_in: Annotated[
-        app_commands.Range[int, 1, 50], Desc("Services before the binding attempt.")
+        Range[int, 1, 50], Desc("Services before the binding attempt.")
     ],
     limit: Annotated[
-        Optional[app_commands.Range[int, 0, 50]],
+        Optional[Range[int, 0, 50]],
         Desc("Optional limit (defaults to Force)."),
     ] = None,
     drain_adjust: Annotated[
-        app_commands.Range[int, -50, 50], Desc("Modifier applied to drain.")
+        Range[int, -50, 50], Desc("Modifier applied to drain.")
     ] = 0,
     pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
 ) -> BindingRoll:
@@ -430,10 +423,10 @@ class SpellRoll(ResistableRoll):
         user_id = context.interaction.user.id
         menu = BaseMenuView(record_id=record.message_id)
         if user_id == record.owner_id:
-            cast_accessor = DirectRollAccessor[SpellRoll](
+            cast_accessor = RollAccessor[SpellRoll](
                 getter=lambda r: r.cast, setter=lambda r, v: replace(r, cast=v)
             )
-            drain_accessor = DirectRollAccessor[SpellRoll](
+            drain_accessor = RollAccessor[SpellRoll](
                 getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
             )
 
@@ -446,7 +439,7 @@ class SpellRoll(ResistableRoll):
                 body="Positive numbers increase the Force, negative numbers decrease it.",
                 fields=[LabeledNumberField("Force", -50, 50)],
             )
-            def adjust_force_button(roll: SpellRoll, force_mod: int) -> SpellRoll:
+            def adjust_force_button(roll: SpellRoll, context: InteractionContext, force_mod: int) -> SpellRoll:
                 new_limit = (
                     roll.force + force_mod
                     if roll.cast.limit == roll.force
@@ -465,7 +458,7 @@ class SpellRoll(ResistableRoll):
                 body="Enter the new drain code, relative to Force.",
                 fields=[LabeledNumberField("DV", -50, 50, placeholder="e.g. -3")],
             )
-            def adjust_dv_button(roll: SpellRoll, dv_mod: int) -> SpellRoll:
+            def adjust_dv_button(roll: SpellRoll, context: InteractionContext, dv_mod: int) -> SpellRoll:
                 return replace(roll, drain_value=roll.force + dv_mod)
 
             menu.add_text(f"Drain roll for {record.label}")
@@ -473,7 +466,7 @@ class SpellRoll(ResistableRoll):
             menu.add_adjust_dice_button(record.roll_result, drain_accessor)
 
         if user_id in record.roll_result.resistance_rolls.keys():
-            resist_accessor = DirectRollAccessor[SpellRoll](
+            resist_accessor = RollAccessor[SpellRoll](
                 getter=lambda r: r.resistance_rolls[user_id],
                 setter=lambda r, v: replace(
                     r, resistance_rolls={**r.resistance_rolls, user_id: v}
@@ -494,9 +487,12 @@ class SpellRoll(ResistableRoll):
         return [*self.resistance_rolls.keys()]
 
     def resist(
-        self, record: MessageRecord, context: InteractionContext, dice: int
+        self, context: InteractionContext, dice: int, limit: int, pre_edge: bool
     ) -> ResistableRoll:
-        resist_roll = roll_hits(dice, limit=0, gremlins=0)
+        if pre_edge:
+            resist_roll = roll_exploding(dice, limit=limit, gremlins=0)
+        else:
+            resist_roll = roll_hits(dice, limit=limit, gremlins=0)
         user_id = context.interaction.user.id
         return replace(
             self, resistance_rolls={**self.resistance_rolls, user_id: resist_roll}
@@ -508,24 +504,20 @@ class SpellRoll(ResistableRoll):
 )
 def roll_spell(
     *,
-    force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spell.")],
-    cast_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice pool for spellcasting.")
-    ],
-    drain_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")
-    ],
+    force: Annotated[Range[int, 1, 50], Desc("Force of the spell.")],
+    cast_dice: Annotated[Range[int, 1, 99], Desc("Dice pool for spellcasting.")],
+    drain_dice: Annotated[Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
     drain_code: Annotated[
-        app_commands.Range[int, -50, 50],
+        Range[int, -50, 50],
         Desc("Drain value, relative to Force. e.g. `-3`"),
     ],
     limit_override: Annotated[
-        Optional[app_commands.Range[int, 0, 50]],
+        Optional[Range[int, 0, 50]],
         Desc("Optional limit override (defaults to Force)."),
     ] = None,
     pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
     opposing_pool: Annotated[
-        Optional[app_commands.Range[int, 0, 99]],
+        Optional[Range[int, 0, 99]],
         Desc("Does the spell roll against an inherent pool? e.g. Object Resistance"),
     ] = None,
 ) -> SpellRoll:
@@ -581,10 +573,10 @@ class SummonRoll(RollRecordBase):
 
     @classmethod
     async def send_menu(cls, record: MessageRecord, context: InteractionContext):
-        summon_accessor = DirectRollAccessor[SummonRoll](
+        summon_accessor = RollAccessor[SummonRoll](
             getter=lambda r: r.summon, setter=lambda r, v: replace(r, summon=v)
         )
-        drain_accessor = DirectRollAccessor[SummonRoll](
+        drain_accessor = RollAccessor[SummonRoll](
             getter=lambda r: r.drain, setter=lambda r, v: replace(r, drain=v)
         )
         menu = BaseMenuView(record_id=record.message_id)
@@ -597,7 +589,7 @@ class SummonRoll(RollRecordBase):
             body="Positive numbers increase the Force, negative numbers decrease it.",
             fields=[LabeledNumberField("Force", -50, 50)],
         )
-        def adjust_force_button(roll: SummonRoll, force_mod: int) -> SummonRoll:
+        def adjust_force_button(roll: SummonRoll, context: InteractionContext, force_mod: int) -> SummonRoll:
             new_limit = (
                 roll.force + force_mod
                 if roll.summon.limit == roll.force
@@ -616,7 +608,7 @@ class SummonRoll(RollRecordBase):
             body="Positive numbers increase the DV, negative numbers decrease it.",
             fields=[LabeledNumberField("DV", -50, 50)],
         )
-        def adjust_dv_button(roll: SummonRoll, dv_mod: int) -> SummonRoll:
+        def adjust_dv_button(roll: SummonRoll, context: InteractionContext, dv_mod: int) -> SummonRoll:
             return replace(roll, drain_adjust=dv_mod)
 
         menu.add_text(f"Drain roll for {record.label}")
@@ -628,19 +620,15 @@ class SummonRoll(RollRecordBase):
 @roll_command(desc="Roll to summon a spirit.")
 def roll_summon(
     *,
-    force: Annotated[app_commands.Range[int, 1, 50], Desc("Force of the spirit.")],
-    summon_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice pool for summoning.")
-    ],
-    drain_dice: Annotated[
-        app_commands.Range[int, 1, 99], Desc("Dice pool for resisting drain.")
-    ],
+    force: Annotated[Range[int, 1, 50], Desc("Force of the spirit.")],
+    summon_dice: Annotated[Range[int, 1, 99], Desc("Dice pool for summoning.")],
+    drain_dice: Annotated[Range[int, 1, 99], Desc("Dice pool for resisting drain.")],
     limit_override: Annotated[
-        Optional[app_commands.Range[int, 0, 50]],
+        Optional[Range[int, 0, 50]],
         Desc("Optional limit (defaults to Force)."),
     ] = None,
     drain_adjust: Annotated[
-        app_commands.Range[int, -50, 50], Desc("Modifier applied to drain.")
+        Range[int, -50, 50], Desc("Modifier applied to drain.")
     ] = 0,
     pre_edge: Annotated[bool, Desc("Pre-edge the binding roll.")] = False,
 ) -> SummonRoll:
@@ -947,10 +935,6 @@ class SummonRollView(BaseRollView):
             or result.drain.glitch == Glitch.GLITCH
         ):
             return 0xCC44CC if result.succeeded else 0xCC4444
-
-        if result.succeeded:
-            return 0x88FF88
-        return 0xFF8888 if result.drain_taken > 0 else 0xFFAA66
 
         if result.succeeded:
             return 0x88FF88
